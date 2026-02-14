@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -9,9 +10,10 @@ import (
 )
 
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version    = "dev"
+	commit     = "none"
+	date       = "unknown"
+	jsonOutput bool
 )
 
 func main() {
@@ -23,7 +25,17 @@ func main() {
 It provides secure database access for AI agents through named connection profiles,
 with credentials stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service).`,
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Store JSON output flag in context for subcommands
+			ctx := context.WithValue(cmd.Context(), "json_output", jsonOutput)
+			cmd.SetContext(ctx)
+			return nil
+		},
 	}
+
+	// Add global --json flag
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false,
+		"Output in JSON format for machine parsing")
 
 	// Add commands
 	rootCmd.AddCommand(cli.NewConfigCmd())

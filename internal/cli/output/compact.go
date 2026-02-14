@@ -19,10 +19,11 @@ type CompactResult struct {
 
 // ErrorResult represents an error in compact format
 type ErrorResult struct {
-	Error string  `json:"error"`
-	Hint  *string `json:"hint,omitempty"`
-	Code  *string `json:"code,omitempty"`
-	Pos   *int    `json:"pos,omitempty"`
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Hint    *string `json:"hint,omitempty"`
+	Code    *string `json:"code,omitempty"`
+	Pos     *int    `json:"pos,omitempty"`
 }
 
 // FormatOptions controls output formatting
@@ -106,10 +107,11 @@ func formatCompactResult(result *database.QueryResult, opts FormatOptions) inter
 // FormatError formats an error in compact JSON
 func FormatError(err error, hint, code *string, position *int) (string, error) {
 	errResult := &ErrorResult{
-		Error: err.Error(),
-		Hint:  hint,
-		Code:  code,
-		Pos:   position,
+		Success: false,
+		Error:   err.Error(),
+		Hint:    hint,
+		Code:    code,
+		Pos:     position,
 	}
 
 	bytes, err := json.Marshal(errResult)

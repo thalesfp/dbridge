@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli/form"
+	"github.com/thalesfp/dbridge/internal/cli/output"
 	"github.com/thalesfp/dbridge/internal/config"
 	"github.com/thalesfp/dbridge/internal/credentials"
 	"golang.org/x/term"
@@ -73,8 +74,18 @@ Examples:
 `,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Get formatter
+			formatter := getFormatter(cmd)
+
 			// Check if any flags were explicitly set (flag-based mode)
 			flagMode := cmd.Flags().Changed("database") || cmd.Flags().Changed("username")
+
+			// JSON mode requires flag mode (no interactive TUI)
+			if formatter.JSONMode && !flagMode {
+				return formatError(cmd, "invalid_mode",
+					"--json mode requires using flags (--database, --username, etc.) instead of interactive form",
+					nil)
+			}
 
 			var profileData *form.ProfileData
 			var err error
@@ -199,7 +210,35 @@ Examples:
 				return fmt.Errorf("failed to save config: %w", err)
 			}
 
-			if flagMode {
+			// Output success message
+			if formatter.JSONMode {
+				// JSON output
+				credStore := "none"
+				if profileData.Password != "" {
+					store, _ := credentials.NewStore("dbridge")
+					if store != nil {
+						credStore = store.Type()
+					}
+				}
+
+				data := map[string]interface{}{
+					"profile": map[string]interface{}{
+						"name":      profileData.Name,
+						"host":      profileData.Host,
+						"port":      profileData.Port,
+						"database":  profileData.Database,
+						"username":  profileData.Username,
+						"ssl_mode":  profileData.SSLMode,
+						"pool_size": profileData.PoolSize,
+						"read_only": true,
+					},
+					"credentials_stored": profileData.Password != "",
+					"credential_store":   credStore,
+				}
+
+				msg := fmt.Sprintf("Profile '%s' added successfully", profileData.Name)
+				return formatter.Success("config_add", data, msg)
+			} else if flagMode {
 				// Simple output for flag mode
 				fmt.Printf("✓ Profile '%s' added successfully\n", profileData.Name)
 				if profileData.Password != "" {
@@ -261,21 +300,81 @@ func readPassword() ([]byte, error) {
 	return term.ReadPassword(int(syscall.Stdin))
 }
 
+// getFormatter creates a formatter instance based on the JSON output flag
+func getFormatter(cmd *cobra.Command) *output.Formatter {
+	jsonMode := false
+	if val := cmd.Context().Value("json_output"); val != nil {
+		jsonMode = val.(bool)
+	}
+	return output.NewFormatter(jsonMode)
+}
+
+// formatError outputs a structured error in JSON mode
+func formatError(cmd *cobra.Command, code, message string, details interface{}) error {
+	formatter := getFormatter(cmd)
+	if formatter.JSONMode {
+		formatter.Error(code, message, details)
+	}
+	return fmt.Errorf(message)
+}
+
+// getProfileNames returns a list of all profile names from config
+func getProfileNames(cfg *config.Config) []string {
+	names := make([]string, 0, len(cfg.Profiles))
+	for name := range cfg.Profiles {
+		names = append(names, name)
+	}
+	return names
+}
+
 // newConfigListCmd creates the 'config list' command
 func newConfigListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all connection profiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			formatter := getFormatter(cmd)
+
 			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
 			if len(cfg.Profiles) == 0 {
+				if formatter.JSONMode {
+					return formatter.Success("config_list", map[string]interface{}{
+						"profiles":        []interface{}{},
+						"default_profile": "",
+						"total_count":     0,
+					}, "No profiles configured")
+				}
+
 				fmt.Println("No profiles configured")
 				fmt.Println("\nAdd a profile with: dbridge config add <name>")
 				return nil
+			}
+
+			if formatter.JSONMode {
+				profiles := make([]map[string]interface{}, 0, len(cfg.Profiles))
+				for name, profile := range cfg.Profiles {
+					profiles = append(profiles, map[string]interface{}{
+						"name":       name,
+						"host":       profile.Host,
+						"port":       profile.Port,
+						"database":   profile.Database,
+						"username":   profile.Username,
+						"ssl_mode":   profile.SSLMode,
+						"pool_size":  profile.PoolSize,
+						"read_only":  profile.ReadOnly,
+						"is_default": name == cfg.Settings.DefaultProfile,
+					})
+				}
+
+				return formatter.Success("config_list", map[string]interface{}{
+					"profiles":        profiles,
+					"default_profile": cfg.Settings.DefaultProfile,
+					"total_count":     len(cfg.Profiles),
+				}, fmt.Sprintf("Found %d profile(s)", len(cfg.Profiles)))
 			}
 
 			fmt.Println("Profiles:")
@@ -314,6 +413,7 @@ func newConfigShowCmd() *cobra.Command {
 		Short: "Show profile details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			formatter := getFormatter(cmd)
 			profileName := args[0]
 
 			cfg, err := config.Load()
@@ -323,7 +423,32 @@ func newConfigShowCmd() *cobra.Command {
 
 			profile, err := cfg.GetProfile(profileName)
 			if err != nil {
-				return err
+				return formatError(cmd, "profile_not_found",
+					fmt.Sprintf("profile not found: %s", profileName),
+					map[string]interface{}{
+						"profile_name":       profileName,
+						"available_profiles": getProfileNames(cfg),
+					})
+			}
+
+			if formatter.JSONMode {
+				data := map[string]interface{}{
+					"profile": map[string]interface{}{
+						"name":       profile.Name,
+						"host":       profile.Host,
+						"port":       profile.Port,
+						"database":   profile.Database,
+						"username":   profile.Username,
+						"ssl_mode":   profile.SSLMode,
+						"pool_size":  profile.PoolSize,
+						"read_only":  profile.ReadOnly,
+						"is_default": profile.Name == cfg.Settings.DefaultProfile,
+					},
+					"has_credentials": true,
+				}
+
+				return formatter.Success("config_show", data,
+					fmt.Sprintf("Profile '%s' details", profileName))
 			}
 
 			fmt.Printf("Profile: %s\n", profile.Name)
@@ -348,6 +473,7 @@ func newConfigRemoveCmd() *cobra.Command {
 		Short: "Remove a connection profile",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			formatter := getFormatter(cmd)
 			profileName := args[0]
 
 			cfg, err := config.Load()
@@ -362,18 +488,33 @@ func newConfigRemoveCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
-			if err := credStore.Delete(ctx, profileName); err != nil {
-				fmt.Printf("Warning: failed to delete credentials: %v\n", err)
+			credDeleteErr := credStore.Delete(ctx, profileName)
+			if credDeleteErr != nil && !formatter.JSONMode {
+				fmt.Printf("Warning: failed to delete credentials: %v\n", credDeleteErr)
 			}
 
 			// Remove profile from config
 			if err := cfg.RemoveProfile(profileName); err != nil {
-				return err
+				return formatError(cmd, "profile_not_found",
+					fmt.Sprintf("profile not found: %s", profileName),
+					map[string]interface{}{
+						"profile_name":       profileName,
+						"available_profiles": getProfileNames(cfg),
+					})
 			}
 
 			// Save config
 			if err := cfg.Save(); err != nil {
 				return fmt.Errorf("failed to save config: %w", err)
+			}
+
+			if formatter.JSONMode {
+				data := map[string]interface{}{
+					"profile_name":        profileName,
+					"credentials_deleted": credDeleteErr == nil,
+				}
+				return formatter.Success("config_remove", data,
+					fmt.Sprintf("Profile '%s' removed successfully", profileName))
 			}
 
 			fmt.Printf("✓ Profile '%s' removed\n", profileName)
@@ -401,7 +542,15 @@ Examples:
 `,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			formatter := getFormatter(cmd)
 			sourceProfileName := args[0]
+
+			// JSON mode not supported for clone (requires interactive TUI)
+			if formatter.JSONMode {
+				return formatError(cmd, "invalid_mode",
+					"--json mode is not supported for config clone (requires interactive form)",
+					nil)
+			}
 
 			// Load config
 			cfg, err := config.Load()
@@ -511,7 +660,15 @@ Examples:
 `,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			formatter := getFormatter(cmd)
 			profileName := args[0]
+
+			// JSON mode not supported for edit (requires interactive TUI)
+			if formatter.JSONMode {
+				return formatError(cmd, "invalid_mode",
+					"--json mode is not supported for config edit (requires interactive form)",
+					nil)
+			}
 
 			// Load config
 			cfg, err := config.Load()
