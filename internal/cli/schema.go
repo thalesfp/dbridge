@@ -7,9 +7,9 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/thalesgelinger/dbbridge/internal/config"
-	"github.com/thalesgelinger/dbbridge/internal/credentials"
-	"github.com/thalesgelinger/dbbridge/internal/database"
+	"github.com/thalesgelinger/dbridge/internal/config"
+	"github.com/thalesgelinger/dbridge/internal/credentials"
+	"github.com/thalesgelinger/dbridge/internal/database"
 )
 
 // NewSchemaCmd creates the schema command
@@ -163,7 +163,7 @@ func getConnection(profileName string) (database.Connection, error) {
 	}
 
 	// Load credentials
-	credStore, err := credentials.NewStore("dbbridge")
+	credStore, err := credentials.NewStore("dbridge")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open credential store: %w", err)
 	}

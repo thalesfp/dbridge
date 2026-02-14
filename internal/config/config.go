@@ -69,7 +69,7 @@ func DefaultConfig() *Config {
 				MaxRowsWithoutConfirmation: 1000,
 			},
 			AuditLog:     true,
-			AuditLogPath: "~/.dbbridge/audit.log",
+			AuditLogPath: "~/.dbridge/audit.log",
 		},
 		Profiles: make(map[string]*Profile),
 	}
@@ -214,5 +214,5 @@ func getConfigDir() (string, error) {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	return filepath.Join(homeDir, ".config", "dbbridge"), nil
+	return filepath.Join(homeDir, ".config", "dbridge"), nil
 }

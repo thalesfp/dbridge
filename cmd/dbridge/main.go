@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/thalesgelinger/dbbridge/internal/cli"
+	"github.com/thalesgelinger/dbridge/internal/cli"
 )
 
 var (
@@ -16,9 +16,9 @@ var (
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "dbbridge",
+		Use:   "dbridge",
 		Short: "Multi-database CLI for AI agents with MCP server",
-		Long: `dbbridge is a cross-platform database CLI tool with MCP server support.
+		Long: `dbridge is a cross-platform database CLI tool with MCP server support.
 
 It provides secure database access for AI agents through named connection profiles,
 with credentials stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service).`,

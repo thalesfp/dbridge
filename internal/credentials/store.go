@@ -47,7 +47,7 @@ func NewKeyringStore(serviceName string) (*KeyringStore, error) {
 		ServiceName:              serviceName,
 		KeychainName:             serviceName,
 		KeychainTrustApplication: true,
-		FileDir:                  "~/.config/dbbridge/",
+		FileDir:                  "~/.config/dbridge/",
 		FilePasswordFunc:         keyring.TerminalPrompt,
 	})
 	if err != nil {
@@ -68,7 +68,7 @@ func (s *KeyringStore) Save(ctx context.Context, profile string, creds Credentia
 	err := s.keyring.Set(keyring.Item{
 		Key:   s.profileKey(profile),
 		Data:  []byte(data),
-		Label: fmt.Sprintf("dbbridge-%s", profile),
+		Label: fmt.Sprintf("dbridge-%s", profile),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to save credentials: %w", err)

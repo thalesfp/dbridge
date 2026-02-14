@@ -1,4 +1,4 @@
-# dbbridge - Database Bridge for AI Agents
+# dbridge - Database Bridge for AI Agents
 
 A cross-platform database CLI tool with MCP (Model Context Protocol) server support, designed to bridge AI agents like Claude Code to databases.
 
@@ -16,10 +16,10 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 ### From Source
 
 ```bash
-git clone https://github.com/thalesgelinger/dbbridge.git
-cd dbbridge
+git clone https://github.com/thalesgelinger/dbridge.git
+cd dbridge
 make build
-./bin/dbbridge --version
+./bin/dbridge --version
 ```
 
 ### Make Commands
@@ -43,7 +43,7 @@ make help           # Show all commands
 ### 1. Add a Database Connection
 
 ```bash
-dbbridge config add local \
+dbridge config add local \
   --host=localhost \
   --database=mydb \
   --username=admin
@@ -54,15 +54,15 @@ dbbridge config add local \
 
 ```bash
 # Simple count
-dbbridge query "SELECT count(*) FROM users"
+dbridge query "SELECT count(*) FROM users"
 # Output: 1247
 
 # List emails
-dbbridge query "SELECT email FROM users LIMIT 3"
+dbridge query "SELECT email FROM users LIMIT 3"
 # Output: ["alice@example.com", "bob@example.com", "charlie@example.com"]
 
 # Multi-column result
-dbbridge query "SELECT id, name, active FROM users LIMIT 2"
+dbridge query "SELECT id, name, active FROM users LIMIT 2"
 # Output: {"cols":["id","name","active"],"rows":[[1,"Alice",true],[2,"Bob",false]]}
 ```
 
@@ -70,18 +70,18 @@ dbbridge query "SELECT id, name, active FROM users LIMIT 2"
 
 ```bash
 # List all profiles
-dbbridge config list
+dbridge config list
 
 # Show profile details
-dbbridge config show local
+dbridge config show local
 
 # Remove profile
-dbbridge config remove staging
+dbridge config remove staging
 ```
 
 ## Configuration
 
-Configuration file: `~/.config/dbbridge/config.yaml`
+Configuration file: `~/.config/dbridge/config.yaml`
 
 ```yaml
 settings:

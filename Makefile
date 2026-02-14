@@ -1,5 +1,5 @@
-# dbbridge Makefile
-# Common development tasks for the dbbridge project
+# dbridge Makefile
+# Common development tasks for the dbridge project
 
 .DEFAULT_GOAL := help
 
@@ -8,11 +8,11 @@
 ###################
 
 .PHONY: build
-build: ## Build dbbridge binary
-	@echo "Building dbbridge..."
+build: ## Build dbridge binary
+	@echo "Building dbridge..."
 	@mkdir -p bin
-	go build -o bin/dbbridge ./cmd/dbbridge
-	@echo "✓ Binary created at bin/dbbridge"
+	go build -o bin/dbridge ./cmd/dbridge
+	@echo "✓ Binary created at bin/dbridge"
 
 ###################
 # Test
@@ -49,9 +49,9 @@ fmt: ## Format code
 .PHONY: db-setup
 db-setup: ## Create test database and load fixtures
 	@echo "Setting up test database..."
-	psql -U postgres -c "DROP DATABASE IF EXISTS dbbridge_test;" || true
-	psql -U postgres -c "CREATE DATABASE dbbridge_test;"
-	psql -U postgres -d dbbridge_test -f test/fixtures/sample_data.sql
+	psql -U postgres -c "DROP DATABASE IF EXISTS dbridge_test;" || true
+	psql -U postgres -c "CREATE DATABASE dbridge_test;"
+	psql -U postgres -d dbridge_test -f test/fixtures/sample_data.sql
 	@echo "✓ Test database ready"
 
 ###################
@@ -70,7 +70,7 @@ clean: ## Remove build artifacts
 
 .PHONY: help
 help: ## Show available commands
-	@echo "dbbridge - Multi-database MCP Server for AI Agents"
+	@echo "dbridge - Multi-database MCP Server for AI Agents"
 	@echo ""
 	@echo "Available commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'

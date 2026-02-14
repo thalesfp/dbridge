@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalesgelinger/dbbridge/internal/database"
+	"github.com/thalesgelinger/dbridge/internal/database"
 )
 
 // TestFormatCSV tests basic CSV formatting with header

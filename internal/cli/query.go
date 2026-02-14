@@ -6,10 +6,10 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/thalesgelinger/dbbridge/internal/cli/output"
-	"github.com/thalesgelinger/dbbridge/internal/config"
-	"github.com/thalesgelinger/dbbridge/internal/credentials"
-	"github.com/thalesgelinger/dbbridge/internal/database"
+	"github.com/thalesgelinger/dbridge/internal/cli/output"
+	"github.com/thalesgelinger/dbridge/internal/config"
+	"github.com/thalesgelinger/dbridge/internal/credentials"
+	"github.com/thalesgelinger/dbridge/internal/database"
 )
 
 // NewQueryCmd creates the query command
@@ -46,7 +46,7 @@ func NewQueryCmd() *cobra.Command {
 			}
 
 			// Load credentials
-			credStore, err := credentials.NewStore("dbbridge")
+			credStore, err := credentials.NewStore("dbridge")
 			if err != nil {
 				return fmt.Errorf("failed to open credential store: %w", err)
 			}

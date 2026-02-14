@@ -7,9 +7,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
-	"github.com/thalesgelinger/dbbridge/internal/cli/form"
-	"github.com/thalesgelinger/dbbridge/internal/config"
-	"github.com/thalesgelinger/dbbridge/internal/credentials"
+	"github.com/thalesgelinger/dbridge/internal/cli/form"
+	"github.com/thalesgelinger/dbridge/internal/config"
+	"github.com/thalesgelinger/dbridge/internal/credentials"
 	"golang.org/x/term"
 )
 
@@ -64,12 +64,12 @@ Flag mode (for automation):
   - Use --password flag or omit it for interactive password prompt
 
 Examples:
-  dbbridge config add                    # Interactive TUI form
-  dbbridge config add production         # Interactive with pre-filled name
+  dbridge config add                    # Interactive TUI form
+  dbridge config add production         # Interactive with pre-filled name
 
   # Flag-based (non-interactive)
-  dbbridge config add mydb --host=localhost --database=myapp --username=admin --password=secret
-  dbbridge config add mydb --host=localhost --database=myapp --username=admin  # Password prompt only
+  dbridge config add mydb --host=localhost --database=myapp --username=admin --password=secret
+  dbridge config add mydb --host=localhost --database=myapp --username=admin  # Password prompt only
 `,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -173,7 +173,7 @@ Examples:
 			}
 
 			// Save credentials to keychain
-			credStore, err := credentials.NewStore("dbbridge")
+			credStore, err := credentials.NewStore("dbridge")
 			if err != nil {
 				return fmt.Errorf("failed to open credential store: %w", err)
 			}
@@ -274,7 +274,7 @@ func newConfigListCmd() *cobra.Command {
 
 			if len(cfg.Profiles) == 0 {
 				fmt.Println("No profiles configured")
-				fmt.Println("\nAdd a profile with: dbbridge config add <name>")
+				fmt.Println("\nAdd a profile with: dbridge config add <name>")
 				return nil
 			}
 
@@ -356,7 +356,7 @@ func newConfigRemoveCmd() *cobra.Command {
 			}
 
 			// Remove credentials from keychain
-			credStore, err := credentials.NewStore("dbbridge")
+			credStore, err := credentials.NewStore("dbridge")
 			if err != nil {
 				return fmt.Errorf("failed to open credential store: %w", err)
 			}
@@ -396,8 +396,8 @@ You can interactively edit any fields during the cloning process.
 The new profile will have its own separate credentials in the keychain.
 
 Examples:
-  dbbridge config clone production staging
-  dbbridge config clone local     # Interactive name prompt
+  dbridge config clone production staging
+  dbridge config clone local     # Interactive name prompt
 `,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -416,7 +416,7 @@ Examples:
 			}
 
 			// Load source credentials (may not exist for passwordless profiles)
-			credStore, err := credentials.NewStore("dbbridge")
+			credStore, err := credentials.NewStore("dbridge")
 			if err != nil {
 				return fmt.Errorf("failed to open credential store: %w", err)
 			}
@@ -506,8 +506,8 @@ You can modify any field and save the changes.
 Note: Changing the profile name will create a new profile and remove the old one.
 
 Examples:
-  dbbridge config edit production
-  dbbridge config edit local
+  dbridge config edit production
+  dbridge config edit local
 `,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -526,7 +526,7 @@ Examples:
 			}
 
 			// Load existing credentials (may not exist for passwordless profiles)
-			credStore, err := credentials.NewStore("dbbridge")
+			credStore, err := credentials.NewStore("dbridge")
 			if err != nil {
 				return fmt.Errorf("failed to open credential store: %w", err)
 			}

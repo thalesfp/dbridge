@@ -46,10 +46,10 @@ Launches the rich TUI form with visual feedback:
 
 ```bash
 # Fully interactive
-dbbridge config add
+dbridge config add
 
 # Pre-fill profile name
-dbbridge config add production
+dbridge config add production
 ```
 
 **Features:**
@@ -65,14 +65,14 @@ Use flags to skip the interactive form:
 
 ```bash
 # With password in command (not recommended for security)
-dbbridge config add mydb \
+dbridge config add mydb \
   --host=localhost \
   --database=myapp \
   --username=admin \
   --password=secret
 
 # Without password flag (will prompt securely)
-dbbridge config add mydb \
+dbridge config add mydb \
   --host=localhost \
   --database=myapp \
   --username=admin
@@ -80,7 +80,7 @@ dbbridge config add mydb \
 # Confirm password: [hidden input]
 
 # With custom settings
-dbbridge config add production \
+dbridge config add production \
   --host=db.example.com \
   --port=5433 \
   --database=myapp_prod \
@@ -101,7 +101,7 @@ dbbridge config add production \
 
 ```bash
 # Interactive clone
-dbbridge config clone production staging
+dbridge config clone production staging
 
 # Will open TUI form pre-filled with 'production' settings
 # Name field will show 'staging'
@@ -112,7 +112,7 @@ dbbridge config clone production staging
 
 ```bash
 # Edit existing profile
-dbbridge config edit production
+dbridge config edit production
 
 # Will open TUI form with current values
 # Can modify any field including profile name
