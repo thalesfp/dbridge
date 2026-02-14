@@ -4,17 +4,12 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 
 ## Features
 
-- ✅ **Multi-Database Support**: PostgreSQL (more databases coming soon)
-- ✅ **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-- ✅ **Multi-Profile Management**: Manage multiple database connections with named profiles
-- ✅ **Multiple Output Formats**:
-  - **Compact JSON**: Ultra token-efficient for AI agents (60-99% reduction)
-  - **Table**: Beautiful Unicode borders for human readability
-  - **CSV**: Standard CSV export with headers
-- ✅ **Schema Inspection**: List schemas, tables, and describe table structures
-- ✅ **Read-Only Mode**: Safe query execution without risk of data modification
-- 🚧 **MCP Server**: Coming soon - native integration with Claude Code and other AI tools
-- 🔜 **Write Operations**: Planned for future release with safety controls and audit logging
+- **Multi-Database Support**: PostgreSQL (more databases planned)
+- **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) — passwords never stored in config files or logs
+- **Multi-Profile Management**: Manage multiple database connections with named profiles
+- **Multiple Output Formats**: Compact JSON (token-efficient for AI agents), table, and CSV
+- **Schema Inspection**: List schemas, tables, and describe table structures
+- **Read-Only Mode**: Safe query execution without risk of data modification
 
 ## Installation
 
@@ -27,7 +22,7 @@ make build
 ./bin/dbbridge --version
 ```
 
-### Using Make
+### Make Commands
 
 ```bash
 make build          # Build binary
@@ -38,12 +33,10 @@ make clean          # Remove build artifacts
 make help           # Show all commands
 ```
 
-### Homebrew (Coming Soon)
+### Dependencies
 
-```bash
-brew tap thalesgelinger/tap
-brew install dbbridge
-```
+- Go 1.25+
+- PostgreSQL 12+ (for PostgreSQL connections)
 
 ## Quick Start
 
@@ -86,40 +79,6 @@ dbbridge config show local
 dbbridge config remove staging
 ```
 
-## Output Formats
-
-### Ultra-Compact JSON (for AI Agents)
-
-The default format is optimized for token efficiency:
-
-```bash
-# Single value → Just the value
-dbbridge query "SELECT count(*) FROM users"
-1247  # 5 tokens (vs 450 with verbose JSON)
-
-# Single column → Array
-dbbridge query "SELECT email FROM users LIMIT 3"
-["alice@example.com","bob@example.com","charlie@example.com"]  # 30 tokens
-
-# Multi-column → Compact array format
-dbbridge query "SELECT id, name FROM users LIMIT 2"
-{"cols":["id","name"],"rows":[[1,"Alice"],[2,"Bob"]]}  # 180 tokens
-```
-
-### Format Options
-
-```bash
-# Explicit compact format
-dbbridge query "..." --format=compact
-
-# Human-readable table (auto-detected in terminal)
-dbbridge query "..."
-
-# Force specific format
-dbbridge query "..." --format=table
-dbbridge query "..." --format=csv
-```
-
 ## Configuration
 
 Configuration file: `~/.config/dbbridge/config.yaml`
@@ -145,102 +104,10 @@ profiles:
     # Password stored in OS Keychain
 ```
 
-## Project Status
-
-**Phase 1: Core CLI** ✅ **COMPLETED**
-- [x] Basic project structure
-- [x] Credential storage (OS keychain)
-- [x] Configuration management
-- [x] Profile management
-- [x] Query execution
-- [x] Ultra-compact output format
-- [x] Table and CSV output formats
-- [x] Schema inspection
-- [x] Makefile for development
-
-**Phase 2: Multi-Database Support** 🚧 **IN PROGRESS**
-- [x] PostgreSQL support
-- [ ] MySQL/MariaDB support
-- [ ] SQLite support
-- [ ] SQL Server support
-
-**Phase 2.5: Write Operations** 🔜 **PLANNED FOR LATER**
-- [ ] Write operations (INSERT, UPDATE, DELETE)
-- [ ] Safety checks and confirmations
-- [ ] Audit logging
-- [ ] Dry-run mode
-
-**Phase 3: MCP Server** 🔜 **PLANNED**
-- [ ] MCP server implementation
-- [ ] JSON-RPC 2.0 protocol
-- [ ] Claude Desktop integration
-- [ ] MCP tools (execute_sql, list_tables, etc.)
-
-## Development
-
-### Build
-
-```bash
-make build
-# or
-go build -o bin/dbbridge ./cmd/dbbridge
-```
-
-### Run Tests
-
-```bash
-make test
-# or
-go test ./...
-```
-
-### Test Coverage
-
-```bash
-make test-coverage
-# Opens coverage/coverage.html in browser
-```
-
-### Setup Test Database
-
-```bash
-make db-setup
-```
-
-### Dependencies
-
-- Go 1.25+
-- PostgreSQL 12+ (for PostgreSQL connections)
-
-## Architecture
-
-```
-dbbridge/
-├── cmd/
-│   └── dbbridge/           # Main CLI binary
-├── internal/
-│   ├── cli/                # CLI commands
-│   ├── config/             # Configuration management
-│   ├── credentials/        # OS keychain integration
-│   ├── database/           # Database client
-│   └── output/             # Output formatters
-├── test/                   # Tests
-└── Makefile               # Build automation
-```
-
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see LICENSE file for details.
 
 ## Contributing
 
 Contributions welcome! Please open an issue or PR.
-
-## Security
-
-Credentials are stored in OS-native secure storage:
-- **macOS**: Keychain
-- **Windows**: Credential Manager
-- **Linux**: Secret Service (fallback: encrypted file)
-
-Passwords are NEVER stored in config files or logs.
