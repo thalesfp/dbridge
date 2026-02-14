@@ -8,8 +8,9 @@ A cross-platform PostgreSQL CLI tool with MCP (Model Context Protocol) server su
 - ✅ **Multi-Profile Management**: Manage multiple database connections with named profiles
 - ✅ **Ultra-Compact Output**: Token-optimized JSON format for AI agents (60-99% token reduction)
 - ✅ **Smart Format Detection**: Automatically adapts output for humans (table) vs AI (JSON)
+- ✅ **Read-Only Mode**: Safe query execution without risk of data modification
 - 🚧 **MCP Server**: Coming soon - native integration with Claude Code and other AI tools
-- 🚧 **Safety Controls**: Write operations with confirmation prompts and audit logging
+- 🔜 **Write Operations**: Planned for future release with safety controls and audit logging
 
 ## Installation
 
@@ -139,12 +140,16 @@ profiles:
 - [x] Ultra-compact output format
 
 **Phase 2: Advanced Features** 🚧 **IN PROGRESS**
-- [ ] Write operations (INSERT, UPDATE, DELETE)
-- [ ] Safety checks and confirmations
-- [ ] Schema inspection commands
-- [ ] Audit logging
+- [ ] Schema inspection commands (list-schemas, list-tables, describe-table)
 - [ ] Interactive setup wizard
 - [ ] Table output formatter
+- [ ] Enhanced error messages
+
+**Phase 2.5: Write Operations** 🔜 **PLANNED FOR LATER**
+- [ ] Write operations (INSERT, UPDATE, DELETE)
+- [ ] Safety checks and confirmations
+- [ ] Audit logging
+- [ ] Dry-run mode
 
 **Phase 3: MCP Server** 🔜 **PLANNED**
 - [ ] MCP server implementation

@@ -106,7 +106,7 @@ func newConfigAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&username, "username", "", "Database username")
 	cmd.Flags().StringVar(&sslMode, "ssl-mode", "prefer", "SSL mode (disable, require, prefer)")
 	cmd.Flags().IntVar(&poolSize, "pool-size", 5, "Connection pool size")
-	cmd.Flags().BoolVar(&readOnly, "readonly", false, "Force read-only mode")
+	cmd.Flags().BoolVar(&readOnly, "readonly", true, "Read-only mode (v1.0 is read-only only)")
 
 	cmd.MarkFlagRequired("database")
 	cmd.MarkFlagRequired("username")

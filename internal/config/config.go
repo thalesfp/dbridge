@@ -48,7 +48,7 @@ type Profile struct {
 	Username string `mapstructure:"username"` // Optional: can be stored in keychain only
 	SSLMode  string `mapstructure:"ssl_mode"`
 	PoolSize int    `mapstructure:"pool_size"`
-	ReadOnly bool   `mapstructure:"readonly"`
+	ReadOnly bool   `mapstructure:"readonly"` // Always true for now (v1.0 is read-only)
 }
 
 // DefaultConfig returns the default configuration
