@@ -15,6 +15,25 @@ build: ## Build dbridge binary
 	@echo "✓ Binary created at bin/dbridge"
 
 ###################
+# Installation
+###################
+
+.PHONY: install
+install: build ## Install dbridge to /usr/local/bin
+	@echo "Installing dbridge to /usr/local/bin..."
+	@sudo cp bin/dbridge /usr/local/bin/dbridge
+	@sudo chmod +x /usr/local/bin/dbridge
+	@echo "✓ dbridge installed successfully"
+	@echo ""
+	@echo "Run 'dbridge --help' to get started"
+
+.PHONY: uninstall
+uninstall: ## Remove dbridge from /usr/local/bin
+	@echo "Uninstalling dbridge..."
+	@sudo rm -f /usr/local/bin/dbridge
+	@echo "✓ dbridge uninstalled"
+
+###################
 # Test
 ###################
 
