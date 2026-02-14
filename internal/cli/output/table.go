@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/thalesgelinger/pgmcp/internal/database"
+	"github.com/thalesgelinger/dbbridge/internal/database"
 )
 
 // FormatTable formats a query result as an ASCII table with borders

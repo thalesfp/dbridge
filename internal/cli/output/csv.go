@@ -5,7 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 
-	"github.com/thalesgelinger/pgmcp/internal/database"
+	"github.com/thalesgelinger/dbbridge/internal/database"
 )
 
 // FormatCSV formats a query result as CSV

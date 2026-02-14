@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/thalesgelinger/pgmcp/internal/database"
+	"github.com/thalesgelinger/dbbridge/internal/database"
 )
 
 // CompactResult is the ultra-efficient output format

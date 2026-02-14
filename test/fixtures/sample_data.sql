@@ -1,4 +1,4 @@
--- Sample data for testing pgmcp
+-- Sample data for testing dbbridge
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (

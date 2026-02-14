@@ -1,9 +1,10 @@
-# pgmcp - PostgreSQL MCP CLI
+# dbbridge - Database Bridge for AI Agents
 
-A cross-platform PostgreSQL CLI tool with MCP (Model Context Protocol) server support, designed for AI agents like Claude Code.
+A cross-platform database CLI tool with MCP (Model Context Protocol) server support, designed to bridge AI agents like Claude Code to databases.
 
 ## Features
 
+- ✅ **Multi-Database Support**: PostgreSQL (more databases coming soon)
 - ✅ **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 - ✅ **Multi-Profile Management**: Manage multiple database connections with named profiles
 - ✅ **Multiple Output Formats**:
@@ -20,17 +21,28 @@ A cross-platform PostgreSQL CLI tool with MCP (Model Context Protocol) server su
 ### From Source
 
 ```bash
-git clone https://github.com/thalesgelinger/pgmcp.git
-cd pgmcp
-go build -o pgmcp ./cmd/pgmcp
-./pgmcp --version
+git clone https://github.com/thalesgelinger/dbbridge.git
+cd dbbridge
+make build
+./bin/dbbridge --version
+```
+
+### Using Make
+
+```bash
+make build          # Build binary
+make test           # Run tests
+make test-coverage  # Generate coverage report
+make db-setup       # Setup test database
+make clean          # Remove build artifacts
+make help           # Show all commands
 ```
 
 ### Homebrew (Coming Soon)
 
 ```bash
 brew tap thalesgelinger/tap
-brew install pgmcp
+brew install dbbridge
 ```
 
 ## Quick Start
@@ -38,7 +50,7 @@ brew install pgmcp
 ### 1. Add a Database Connection
 
 ```bash
-pgmcp config add local \
+dbbridge config add local \
   --host=localhost \
   --database=mydb \
   --username=admin
@@ -49,15 +61,15 @@ pgmcp config add local \
 
 ```bash
 # Simple count
-pgmcp query "SELECT count(*) FROM users"
+dbbridge query "SELECT count(*) FROM users"
 # Output: 1247
 
 # List emails
-pgmcp query "SELECT email FROM users LIMIT 3"
+dbbridge query "SELECT email FROM users LIMIT 3"
 # Output: ["alice@example.com", "bob@example.com", "charlie@example.com"]
 
 # Multi-column result
-pgmcp query "SELECT id, name, active FROM users LIMIT 2"
+dbbridge query "SELECT id, name, active FROM users LIMIT 2"
 # Output: {"cols":["id","name","active"],"rows":[[1,"Alice",true],[2,"Bob",false]]}
 ```
 
@@ -65,13 +77,13 @@ pgmcp query "SELECT id, name, active FROM users LIMIT 2"
 
 ```bash
 # List all profiles
-pgmcp config list
+dbbridge config list
 
 # Show profile details
-pgmcp config show local
+dbbridge config show local
 
 # Remove profile
-pgmcp config remove staging
+dbbridge config remove staging
 ```
 
 ## Output Formats
@@ -82,15 +94,15 @@ The default format is optimized for token efficiency:
 
 ```bash
 # Single value → Just the value
-pgmcp query "SELECT count(*) FROM users"
+dbbridge query "SELECT count(*) FROM users"
 1247  # 5 tokens (vs 450 with verbose JSON)
 
 # Single column → Array
-pgmcp query "SELECT email FROM users LIMIT 3"
+dbbridge query "SELECT email FROM users LIMIT 3"
 ["alice@example.com","bob@example.com","charlie@example.com"]  # 30 tokens
 
 # Multi-column → Compact array format
-pgmcp query "SELECT id, name FROM users LIMIT 2"
+dbbridge query "SELECT id, name FROM users LIMIT 2"
 {"cols":["id","name"],"rows":[[1,"Alice"],[2,"Bob"]]}  # 180 tokens
 ```
 
@@ -98,18 +110,19 @@ pgmcp query "SELECT id, name FROM users LIMIT 2"
 
 ```bash
 # Explicit compact format
-pgmcp query "..." --format=compact
+dbbridge query "..." --format=compact
 
 # Human-readable table (auto-detected in terminal)
-pgmcp query "..."
+dbbridge query "..."
 
 # Force specific format
-pgmcp query "..." --format=table
+dbbridge query "..." --format=table
+dbbridge query "..." --format=csv
 ```
 
 ## Configuration
 
-Configuration file: `~/.config/pgmcp/config.yaml`
+Configuration file: `~/.config/dbbridge/config.yaml`
 
 ```yaml
 settings:
@@ -141,12 +154,15 @@ profiles:
 - [x] Profile management
 - [x] Query execution
 - [x] Ultra-compact output format
+- [x] Table and CSV output formats
+- [x] Schema inspection
+- [x] Makefile for development
 
-**Phase 2: Advanced Features** 🚧 **IN PROGRESS**
-- [ ] Schema inspection commands (list-schemas, list-tables, describe-table)
-- [ ] Interactive setup wizard
-- [ ] Table output formatter
-- [ ] Enhanced error messages
+**Phase 2: Multi-Database Support** 🚧 **IN PROGRESS**
+- [x] PostgreSQL support
+- [ ] MySQL/MariaDB support
+- [ ] SQLite support
+- [ ] SQL Server support
 
 **Phase 2.5: Write Operations** 🔜 **PLANNED FOR LATER**
 - [ ] Write operations (INSERT, UPDATE, DELETE)
@@ -165,33 +181,51 @@ profiles:
 ### Build
 
 ```bash
-go build -o pgmcp ./cmd/pgmcp
+make build
+# or
+go build -o bin/dbbridge ./cmd/dbbridge
 ```
 
 ### Run Tests
 
 ```bash
+make test
+# or
 go test ./...
+```
+
+### Test Coverage
+
+```bash
+make test-coverage
+# Opens coverage/coverage.html in browser
+```
+
+### Setup Test Database
+
+```bash
+make db-setup
 ```
 
 ### Dependencies
 
-- Go 1.23+
-- PostgreSQL 12+
+- Go 1.25+
+- PostgreSQL 12+ (for PostgreSQL connections)
 
 ## Architecture
 
 ```
-pgmcp/
+dbbridge/
 ├── cmd/
-│   └── pgmcp/              # Main CLI binary
+│   └── dbbridge/           # Main CLI binary
 ├── internal/
 │   ├── cli/                # CLI commands
 │   ├── config/             # Configuration management
 │   ├── credentials/        # OS keychain integration
-│   ├── database/           # PostgreSQL client
+│   ├── database/           # Database client
 │   └── output/             # Output formatters
-└── test/                   # Tests
+├── test/                   # Tests
+└── Makefile               # Build automation
 ```
 
 ## License

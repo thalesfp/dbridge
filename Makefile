@@ -1,5 +1,5 @@
-# pgmcp Makefile
-# Common development tasks for the pgmcp project
+# dbbridge Makefile
+# Common development tasks for the dbbridge project
 
 .DEFAULT_GOAL := help
 
@@ -8,11 +8,11 @@
 ###################
 
 .PHONY: build
-build: ## Build pgmcp binary
-	@echo "Building pgmcp..."
+build: ## Build dbbridge binary
+	@echo "Building dbbridge..."
 	@mkdir -p bin
-	go build -o bin/pgmcp ./cmd/pgmcp
-	@echo "✓ Binary created at bin/pgmcp"
+	go build -o bin/dbbridge ./cmd/dbbridge
+	@echo "✓ Binary created at bin/dbbridge"
 
 ###################
 # Test
@@ -49,9 +49,9 @@ fmt: ## Format code
 .PHONY: db-setup
 db-setup: ## Create test database and load fixtures
 	@echo "Setting up test database..."
-	psql -U postgres -c "DROP DATABASE IF EXISTS pgmcp_test;" || true
-	psql -U postgres -c "CREATE DATABASE pgmcp_test;"
-	psql -U postgres -d pgmcp_test -f test/fixtures/sample_data.sql
+	psql -U postgres -c "DROP DATABASE IF EXISTS dbbridge_test;" || true
+	psql -U postgres -c "CREATE DATABASE dbbridge_test;"
+	psql -U postgres -d dbbridge_test -f test/fixtures/sample_data.sql
 	@echo "✓ Test database ready"
 
 ###################
@@ -70,7 +70,7 @@ clean: ## Remove build artifacts
 
 .PHONY: help
 help: ## Show available commands
-	@echo "pgmcp - PostgreSQL MCP Server"
+	@echo "dbbridge - Multi-database MCP Server for AI Agents"
 	@echo ""
 	@echo "Available commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'

@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/thalesgelinger/pgmcp/internal/config"
-	"github.com/thalesgelinger/pgmcp/internal/credentials"
+	"github.com/thalesgelinger/dbbridge/internal/config"
+	"github.com/thalesgelinger/dbbridge/internal/credentials"
 )
 
 // NewConfigCmd creates the config command
@@ -78,7 +78,7 @@ func newConfigAddCmd() *cobra.Command {
 			}
 
 			// Save credentials to keychain
-			credStore, err := credentials.NewStore("pgmcp")
+			credStore, err := credentials.NewStore("dbbridge")
 			if err != nil {
 				return fmt.Errorf("failed to open credential store: %w", err)
 			}
@@ -137,7 +137,7 @@ func newConfigListCmd() *cobra.Command {
 
 			if len(cfg.Profiles) == 0 {
 				fmt.Println("No profiles configured")
-				fmt.Println("\nAdd a profile with: pgmcp config add <name>")
+				fmt.Println("\nAdd a profile with: dbbridge config add <name>")
 				return nil
 			}
 
@@ -219,7 +219,7 @@ func newConfigRemoveCmd() *cobra.Command {
 			}
 
 			// Remove credentials from keychain
-			credStore, err := credentials.NewStore("pgmcp")
+			credStore, err := credentials.NewStore("dbbridge")
 			if err != nil {
 				return fmt.Errorf("failed to open credential store: %w", err)
 			}

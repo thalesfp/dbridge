@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalesgelinger/pgmcp/internal/database"
+	"github.com/thalesgelinger/dbbridge/internal/database"
 )
 
 // TestFormatCompact_SingleValue tests formatting a single value result
