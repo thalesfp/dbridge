@@ -86,9 +86,7 @@ func NewQueryCmd() *cobra.Command {
 			// Determine output format
 			outputFormat := format
 			if outputFormat == "auto" || outputFormat == "" {
-				// For now, always use compact format (table format not yet implemented)
-				// TODO: Use table format when running in TTY after implementing it
-				outputFormat = "compact"
+				outputFormat = "compact" // Default to compact for now
 			}
 
 			// Format output
@@ -107,15 +105,28 @@ func NewQueryCmd() *cobra.Command {
 				fmt.Println(jsonOutput)
 
 			case "table":
-				// TODO: Implement table format
-				return fmt.Errorf("table format not yet implemented - use --format=compact or omit the flag")
+				tableOutput, err := output.FormatTable(result)
+				if err != nil {
+					return err
+				}
+				fmt.Print(tableOutput)
+
+			case "table-compact":
+				compactTable, err := output.FormatTableCompact(result)
+				if err != nil {
+					return err
+				}
+				fmt.Print(compactTable)
 
 			case "csv":
-				// TODO: Implement CSV format
-				return fmt.Errorf("CSV format not yet implemented - use --format=compact or omit the flag")
+				csvOutput, err := output.FormatCSV(result, true)
+				if err != nil {
+					return err
+				}
+				fmt.Print(csvOutput)
 
 			default:
-				return fmt.Errorf("unknown output format: %s", outputFormat)
+				return fmt.Errorf("unknown output format: %s (available: compact, table, table-compact, csv)", outputFormat)
 			}
 
 			return nil
