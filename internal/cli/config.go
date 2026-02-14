@@ -315,7 +315,7 @@ func formatError(cmd *cobra.Command, code, message string, details interface{}) 
 	if formatter.JSONMode {
 		formatter.Error(code, message, details)
 	}
-	return fmt.Errorf(message)
+	return fmt.Errorf("%s", message)
 }
 
 // getProfileNames returns a list of all profile names from config
