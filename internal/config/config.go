@@ -25,17 +25,17 @@ type Settings struct {
 
 // OutputConfig holds output format settings
 type OutputConfig struct {
-	Default        string `mapstructure:"default"`         // auto, compact, full, table, csv
-	AutoDetectTTY  bool   `mapstructure:"auto_detect_tty"` // Auto-switch based on TTY
-	IncludeTypes   bool   `mapstructure:"include_types"`   // Include column types
-	IncludeTiming  bool   `mapstructure:"include_timing"`  // Include execution time
-	IncludeWarnings bool  `mapstructure:"include_warnings"` // Include warnings
-	SmartSimplify  bool   `mapstructure:"smart_simplify"`  // Smart format for single col/row
+	Default         string `mapstructure:"default"`          // auto, compact, full, table, csv
+	AutoDetectTTY   bool   `mapstructure:"auto_detect_tty"`  // Auto-switch based on TTY
+	IncludeTypes    bool   `mapstructure:"include_types"`    // Include column types
+	IncludeTiming   bool   `mapstructure:"include_timing"`   // Include execution time
+	IncludeWarnings bool   `mapstructure:"include_warnings"` // Include warnings
+	SmartSimplify   bool   `mapstructure:"smart_simplify"`   // Smart format for single col/row
 }
 
 // SafetyConfig holds safety settings
 type SafetyConfig struct {
-	RequireConfirmation        []string `mapstructure:"require_confirmation"`         // Operations requiring confirmation
+	RequireConfirmation        []string `mapstructure:"require_confirmation"`          // Operations requiring confirmation
 	MaxRowsWithoutConfirmation int      `mapstructure:"max_rows_without_confirmation"` // Threshold for confirmations
 }
 

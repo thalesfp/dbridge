@@ -72,9 +72,9 @@ type TableDefinition struct {
 
 // ExplainResult represents query execution plan
 type ExplainResult struct {
-	Plan         string
-	ActualRows   *int64
-	ActualTime   *float64
+	Plan          string
+	ActualRows    *int64
+	ActualTime    *float64
 	EstimatedCost float64
 }
 

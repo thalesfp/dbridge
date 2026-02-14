@@ -6,8 +6,11 @@ A cross-platform PostgreSQL CLI tool with MCP (Model Context Protocol) server su
 
 - ✅ **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 - ✅ **Multi-Profile Management**: Manage multiple database connections with named profiles
-- ✅ **Ultra-Compact Output**: Token-optimized JSON format for AI agents (60-99% token reduction)
-- ✅ **Smart Format Detection**: Automatically adapts output for humans (table) vs AI (JSON)
+- ✅ **Multiple Output Formats**:
+  - **Compact JSON**: Ultra token-efficient for AI agents (60-99% reduction)
+  - **Table**: Beautiful Unicode borders for human readability
+  - **CSV**: Standard CSV export with headers
+- ✅ **Schema Inspection**: List schemas, tables, and describe table structures
 - ✅ **Read-Only Mode**: Safe query execution without risk of data modification
 - 🚧 **MCP Server**: Coming soon - native integration with Claude Code and other AI tools
 - 🔜 **Write Operations**: Planned for future release with safety controls and audit logging
