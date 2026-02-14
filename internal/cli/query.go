@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"github.com/thalesgelinger/pgmcp/internal/cli/output"
 	"github.com/thalesgelinger/pgmcp/internal/config"
@@ -87,11 +86,9 @@ func NewQueryCmd() *cobra.Command {
 			// Determine output format
 			outputFormat := format
 			if outputFormat == "auto" || outputFormat == "" {
-				if isatty.IsTerminal(os.Stdout.Fd()) {
-					outputFormat = "table"
-				} else {
-					outputFormat = "compact"
-				}
+				// For now, always use compact format (table format not yet implemented)
+				// TODO: Use table format when running in TTY after implementing it
+				outputFormat = "compact"
 			}
 
 			// Format output
@@ -111,11 +108,11 @@ func NewQueryCmd() *cobra.Command {
 
 			case "table":
 				// TODO: Implement table format
-				fmt.Println("Table format not yet implemented")
+				return fmt.Errorf("table format not yet implemented - use --format=compact or omit the flag")
 
 			case "csv":
 				// TODO: Implement CSV format
-				fmt.Println("CSV format not yet implemented")
+				return fmt.Errorf("CSV format not yet implemented - use --format=compact or omit the flag")
 
 			default:
 				return fmt.Errorf("unknown output format: %s", outputFormat)
