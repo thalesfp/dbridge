@@ -120,7 +120,7 @@ func (c *Config) Save() error {
 	}
 
 	// Ensure config directory exists
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -168,7 +168,7 @@ func (c *Config) GetProfile(name string) (*Profile, error) {
 		profile.PoolSize = 5
 	}
 	if profile.SSLMode == "" {
-		profile.SSLMode = "prefer"
+		profile.SSLMode = "require"
 	}
 
 	return profile, nil
