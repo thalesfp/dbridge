@@ -3,10 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/thalesgelinger/dbbridge/internal/config"
 	"github.com/thalesgelinger/dbbridge/internal/credentials"
+	"golang.org/x/term"
 )
 
 // NewConfigCmd creates the config command
@@ -50,10 +52,32 @@ func newConfigAddCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			// Get password from user
+			// Get password from user (hidden input)
 			fmt.Printf("Enter password for %s@%s: ", username, host)
-			var password string
-			fmt.Scanln(&password)
+			passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+			if err != nil {
+				return fmt.Errorf("failed to read password: %w", err)
+			}
+			fmt.Println() // Print newline after password input
+
+			// Confirm password
+			fmt.Print("Confirm password: ")
+			confirmBytes, err := term.ReadPassword(int(syscall.Stdin))
+			if err != nil {
+				return fmt.Errorf("failed to read password confirmation: %w", err)
+			}
+			fmt.Println() // Print newline after password confirmation
+
+			// Validate passwords match
+			if string(passwordBytes) != string(confirmBytes) {
+				return fmt.Errorf("passwords do not match")
+			}
+
+			// Validate password is not empty
+			password := string(passwordBytes)
+			if password == "" {
+				return fmt.Errorf("password cannot be empty")
+			}
 
 			// Create profile with defaults
 			if port == 0 {
