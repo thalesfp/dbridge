@@ -104,6 +104,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
+	// Apply defaults if missing
+	if config.Settings.Output.Default == "" {
+		config.Settings.Output = defaults.Settings.Output
+	}
+
 	return &config, nil
 }
 
@@ -153,6 +158,17 @@ func (c *Config) GetProfile(name string) (*Profile, error) {
 	profile, ok := c.Profiles[name]
 	if !ok {
 		return nil, fmt.Errorf("profile '%s' not found", name)
+	}
+
+	// Apply defaults if not set
+	if profile.Port == 0 {
+		profile.Port = 5432
+	}
+	if profile.PoolSize == 0 {
+		profile.PoolSize = 5
+	}
+	if profile.SSLMode == "" {
+		profile.SSLMode = "prefer"
 	}
 
 	return profile, nil

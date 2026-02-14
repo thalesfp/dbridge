@@ -3,6 +3,7 @@ package credentials
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/99designs/keyring"
 )
@@ -85,11 +86,13 @@ func (s *KeyringStore) Load(ctx context.Context, profile string) (Credentials, e
 
 	// Parse username:password format
 	data := string(item.Data)
-	var username, password string
-	if _, err := fmt.Sscanf(data, "%s:%s", &username, &password); err == nil {
+
+	// Split by first colon
+	parts := strings.SplitN(data, ":", 2)
+	if len(parts) == 2 {
 		return Credentials{
-			Username: username,
-			Password: password,
+			Username: parts[0],
+			Password: parts[1],
 		}, nil
 	}
 

@@ -55,7 +55,17 @@ func newConfigAddCmd() *cobra.Command {
 			var password string
 			fmt.Scanln(&password)
 
-			// Create profile
+			// Create profile with defaults
+			if port == 0 {
+				port = 5432
+			}
+			if poolSize == 0 {
+				poolSize = 5
+			}
+			if sslMode == "" {
+				sslMode = "prefer"
+			}
+
 			profile := &config.Profile{
 				Name:     profileName,
 				Host:     host,
