@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalesgelinger/dbridge/internal/database"
+	"github.com/thalesfp/dbridge/internal/database"
 )
 
 // TestFormatTable tests basic table formatting

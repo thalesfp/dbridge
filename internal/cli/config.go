@@ -7,9 +7,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
-	"github.com/thalesgelinger/dbridge/internal/cli/form"
-	"github.com/thalesgelinger/dbridge/internal/config"
-	"github.com/thalesgelinger/dbridge/internal/credentials"
+	"github.com/thalesfp/dbridge/internal/cli/form"
+	"github.com/thalesfp/dbridge/internal/config"
+	"github.com/thalesfp/dbridge/internal/credentials"
 	"golang.org/x/term"
 )
 

@@ -1,4 +1,4 @@
-module github.com/thalesgelinger/dbridge
+module github.com/thalesfp/dbridge
 
 go 1.25.0
 

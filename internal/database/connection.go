@@ -113,6 +113,7 @@ type ConnectionConfig struct {
 	Password string
 	SSLMode  string
 	PoolSize int
+	ReadOnly bool
 }
 
 // PgxConnection implements Connection using pgx
@@ -121,8 +122,8 @@ type PgxConnection struct {
 	config *ConnectionConfig
 }
 
-// NewConnection creates a new database connection
-func NewConnection(ctx context.Context, config *ConnectionConfig) (Connection, error) {
+// buildConnString builds a PostgreSQL connection string from the config.
+func buildConnString(config *ConnectionConfig) string {
 	connString := fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s&pool_max_conns=%d",
 		config.Username,
@@ -133,6 +134,17 @@ func NewConnection(ctx context.Context, config *ConnectionConfig) (Connection, e
 		config.SSLMode,
 		config.PoolSize,
 	)
+
+	if config.ReadOnly {
+		connString += "&default_transaction_read_only=on"
+	}
+
+	return connString
+}
+
+// NewConnection creates a new database connection
+func NewConnection(ctx context.Context, config *ConnectionConfig) (Connection, error) {
+	connString := buildConnString(config)
 
 	poolConfig, err := pgxpool.ParseConfig(connString)
 	if err != nil {

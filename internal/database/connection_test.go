@@ -1,6 +1,9 @@
 package database
 
 import (
+	"context"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -76,6 +79,40 @@ func TestConnectionConfig(t *testing.T) {
 	if config.PoolSize != 10 {
 		t.Errorf("Expected pool size 10, got %d", config.PoolSize)
 	}
+}
+
+// TestBuildConnString_ReadOnly tests that the connection string includes
+// default_transaction_read_only=on when ReadOnly is true.
+func TestBuildConnString_ReadOnly(t *testing.T) {
+	base := ConnectionConfig{
+		Host:     "localhost",
+		Port:     5432,
+		Database: "testdb",
+		Username: "user",
+		Password: "pass",
+		SSLMode:  "disable",
+		PoolSize: 5,
+	}
+
+	t.Run("read-only appends param", func(t *testing.T) {
+		cfg := base
+		cfg.ReadOnly = true
+		cs := buildConnString(&cfg)
+
+		if !strings.Contains(cs, "default_transaction_read_only=on") {
+			t.Errorf("Expected connection string to contain default_transaction_read_only=on, got: %s", cs)
+		}
+	})
+
+	t.Run("read-write omits param", func(t *testing.T) {
+		cfg := base
+		cfg.ReadOnly = false
+		cs := buildConnString(&cfg)
+
+		if strings.Contains(cs, "default_transaction_read_only") {
+			t.Errorf("Expected connection string to NOT contain default_transaction_read_only, got: %s", cs)
+		}
+	})
 }
 
 // TestQueryResult tests query result structure
@@ -343,6 +380,64 @@ func TestExplainResult(t *testing.T) {
 
 	if result.EstimatedCost != 18.50 {
 		t.Errorf("Expected estimated cost 18.50, got %f", result.EstimatedCost)
+	}
+}
+
+// TestReadOnlyConnection_Integration verifies that a read-only connection
+// rejects write operations at the database level.
+// Set TEST_DATABASE_URL to run (e.g. postgres://user:pass@localhost:5432/testdb?sslmode=disable).
+func TestReadOnlyConnection_Integration(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+
+	config := &ConnectionConfig{
+		Host:     "localhost",
+		Port:     5432,
+		Database: "postgres",
+		Username: "postgres",
+		Password: "postgres",
+		SSLMode:  "disable",
+		PoolSize: 1,
+		ReadOnly: true,
+	}
+
+	// Parse DSN to override defaults if provided in a structured format.
+	// For simplicity, we use pgxpool to parse the DSN and extract fields.
+	// But since our NewConnection builds its own string, we just use defaults
+	// and let TEST_DATABASE_URL signal "a PG is available".
+	conn, err := NewConnection(ctx, config)
+	if err != nil {
+		t.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	// SELECT should succeed
+	result, err := conn.Query(ctx, "SELECT 1 AS ok")
+	if err != nil {
+		t.Fatalf("SELECT should succeed on read-only connection: %v", err)
+	}
+	if result.RowCount != 1 {
+		t.Fatalf("Expected 1 row, got %d", result.RowCount)
+	}
+
+	// Write operations should fail
+	writeStatements := []string{
+		"CREATE TABLE _dbridge_ro_test (id int)",
+		"INSERT INTO _dbridge_ro_test VALUES (1)",
+		"DROP TABLE IF EXISTS _dbridge_ro_test",
+	}
+
+	for _, stmt := range writeStatements {
+		_, err := conn.Exec(ctx, stmt)
+		if err == nil {
+			t.Errorf("Expected error for %q on read-only connection, but it succeeded", stmt)
+		} else if !strings.Contains(err.Error(), "read-only") {
+			t.Errorf("Expected read-only error for %q, got: %v", stmt, err)
+		}
 	}
 }
 

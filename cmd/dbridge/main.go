@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/thalesgelinger/dbridge/internal/cli"
+	"github.com/thalesfp/dbridge/internal/cli"
 )
 
 var (

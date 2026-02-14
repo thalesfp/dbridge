@@ -7,9 +7,9 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/thalesgelinger/dbridge/internal/config"
-	"github.com/thalesgelinger/dbridge/internal/credentials"
-	"github.com/thalesgelinger/dbridge/internal/database"
+	"github.com/thalesfp/dbridge/internal/config"
+	"github.com/thalesfp/dbridge/internal/credentials"
+	"github.com/thalesfp/dbridge/internal/database"
 )
 
 // NewSchemaCmd creates the schema command
@@ -183,6 +183,7 @@ func getConnection(profileName string) (database.Connection, error) {
 		Password: creds.Password,
 		SSLMode:  profileConfig.SSLMode,
 		PoolSize: profileConfig.PoolSize,
+		ReadOnly: profileConfig.ReadOnly,
 	}
 
 	conn, err := database.NewConnection(ctx, connConfig)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/thalesgelinger/dbridge/internal/database"
+	"github.com/thalesfp/dbridge/internal/database"
 )
 
 // FormatTable formats a query result as an ASCII table with borders

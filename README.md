@@ -16,7 +16,7 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 ### From Source
 
 ```bash
-git clone https://github.com/thalesgelinger/dbridge.git
+git clone https://github.com/thalesfp/dbridge.git
 cd dbridge
 make build
 ./bin/dbridge --version

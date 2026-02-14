@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/thalesgelinger/dbridge/internal/database"
+	"github.com/thalesfp/dbridge/internal/database"
 )
 
 // CompactResult is the ultra-efficient output format

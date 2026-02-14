@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thalesgelinger/dbridge/internal/database"
+	"github.com/thalesfp/dbridge/internal/database"
 )
 
 // TestFormatCompact_SingleValue tests formatting a single value result
