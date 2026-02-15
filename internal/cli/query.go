@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli/output"
@@ -14,17 +13,21 @@ import (
 
 // NewQueryCmd creates the query command
 func NewQueryCmd() *cobra.Command {
-	var (
-		profile string
-		format  string
-	)
+	var format string
 
 	cmd := &cobra.Command{
-		Use:   "query [sql]",
+		Use:   "query <profile> <sql>",
 		Short: "Execute a SELECT query",
-		Args:  cobra.ExactArgs(1),
+		Long: `Execute a SELECT query against the specified database profile.
+
+Examples:
+  dbridge query production "SELECT * FROM users LIMIT 10"
+  dbridge query staging-local "SELECT COUNT(*) FROM orders"
+  dbridge query local "SELECT version()"`,
+		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sql := args[0]
+			profileName := args[0]
+			sql := args[1]
 
 			// Load config
 			cfg, err := config.Load()
@@ -32,15 +35,7 @@ func NewQueryCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			// Get profile
-			if profile == "" {
-				profile = os.Getenv("PGMCP_PROFILE")
-			}
-			if profile == "" {
-				profile = cfg.Settings.DefaultProfile
-			}
-
-			profileConfig, err := cfg.GetProfile(profile)
+			profileConfig, err := cfg.GetProfile(profileName)
 			if err != nil {
 				return err
 			}
@@ -52,7 +47,7 @@ func NewQueryCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
-			creds, err := credStore.Load(ctx, profile)
+			creds, err := credStore.Load(ctx, profileName)
 			if err != nil {
 				return fmt.Errorf("failed to load credentials: %w", err)
 			}
@@ -134,7 +129,6 @@ func NewQueryCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&profile, "profile", "p", "", "Connection profile to use")
 	cmd.Flags().StringVarP(&format, "format", "f", "auto", "Output format: auto, compact, table, csv")
 
 	return cmd

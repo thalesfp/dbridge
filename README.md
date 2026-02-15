@@ -54,15 +54,15 @@ dbridge config add local \
 
 ```bash
 # Simple count
-dbridge query "SELECT count(*) FROM users"
+dbridge query local "SELECT count(*) FROM users"
 # Output: 1247
 
 # List emails
-dbridge query "SELECT email FROM users LIMIT 3"
+dbridge query local "SELECT email FROM users LIMIT 3"
 # Output: ["alice@example.com", "bob@example.com", "charlie@example.com"]
 
 # Multi-column result
-dbridge query "SELECT id, name, active FROM users LIMIT 2"
+dbridge query local "SELECT id, name, active FROM users LIMIT 2"
 # Output: {"cols":["id","name","active"],"rows":[[1,"Alice",true],[2,"Bob",false]]}
 ```
 

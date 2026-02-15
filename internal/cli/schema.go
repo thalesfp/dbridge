@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/config"
@@ -29,13 +28,19 @@ func NewSchemaCmd() *cobra.Command {
 
 // newListSchemasCmd creates the 'schema list-schemas' command
 func newListSchemasCmd() *cobra.Command {
-	var profile string
-
 	cmd := &cobra.Command{
-		Use:   "list-schemas",
+		Use:   "list-schemas <profile>",
 		Short: "List all schemas in the database",
+		Long: `List all schemas in the specified database profile.
+
+Examples:
+  dbridge schema list-schemas production
+  dbridge schema list-schemas local`,
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, err := getConnection(profile)
+			profileName := args[0]
+
+			conn, err := getConnection(profileName)
 			if err != nil {
 				return err
 			}
@@ -59,22 +64,26 @@ func newListSchemasCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&profile, "profile", "p", "", "Connection profile to use")
 	return cmd
 }
 
 // newListTablesCmd creates the 'schema list-tables' command
 func newListTablesCmd() *cobra.Command {
-	var (
-		profile string
-		schema  string
-	)
+	var schema string
 
 	cmd := &cobra.Command{
-		Use:   "list-tables",
+		Use:   "list-tables <profile>",
 		Short: "List all tables in a schema",
+		Long: `List all tables in the specified database profile and schema.
+
+Examples:
+  dbridge schema list-tables production
+  dbridge schema list-tables local --schema myschema`,
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conn, err := getConnection(profile)
+			profileName := args[0]
+
+			conn, err := getConnection(profileName)
 			if err != nil {
 				return err
 			}
@@ -98,26 +107,28 @@ func newListTablesCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&profile, "profile", "p", "", "Connection profile to use")
 	cmd.Flags().StringVarP(&schema, "schema", "s", "public", "Schema name")
 	return cmd
 }
 
 // newDescribeTableCmd creates the 'schema describe' command
 func newDescribeTableCmd() *cobra.Command {
-	var (
-		profile string
-		schema  string
-	)
+	var schema string
 
 	cmd := &cobra.Command{
-		Use:   "describe [table]",
+		Use:   "describe <profile> <table>",
 		Short: "Describe table structure",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			tableName := args[0]
+		Long: `Describe the structure of a table in the specified database profile.
 
-			conn, err := getConnection(profile)
+Examples:
+  dbridge schema describe production users
+  dbridge schema describe local orders`,
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profileName := args[0]
+			tableName := args[1]
+
+			conn, err := getConnection(profileName)
 			if err != nil {
 				return err
 			}
@@ -136,7 +147,6 @@ func newDescribeTableCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&profile, "profile", "p", "", "Connection profile to use")
 	cmd.Flags().StringVarP(&schema, "schema", "s", "public", "Schema name")
 	return cmd
 }
@@ -147,14 +157,6 @@ func getConnection(profileName string) (database.Connection, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Get profile
-	if profileName == "" {
-		profileName = os.Getenv("PGMCP_PROFILE")
-	}
-	if profileName == "" {
-		profileName = cfg.Settings.DefaultProfile
 	}
 
 	profileConfig, err := cfg.GetProfile(profileName)
