@@ -38,14 +38,19 @@ uninstall: ## Remove dbridge from /usr/local/bin
 ###################
 
 .PHONY: test
-test: ## Run all tests
-	go test -v ./...
+test: ## Run unit tests
+	go test -v -short ./...
+
+.PHONY: test-integration
+test-integration: ## Run integration tests (requires docker-up)
+	TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5440/postgres?sslmode=disable" \
+		go test -v -run Integration ./...
 
 .PHONY: test-coverage
-test-coverage: ## Run tests with coverage report
+test-coverage: ## Run unit tests with coverage report
 	@echo "Running tests with coverage..."
 	@mkdir -p coverage
-	go test -v -race -coverprofile=coverage/coverage.out ./...
+	go test -v -short -race -coverprofile=coverage/coverage.out ./...
 	go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 	@echo "✓ Coverage report: coverage/coverage.html"
 
@@ -72,6 +77,30 @@ db-setup: ## Create test database and load fixtures
 	psql -U postgres -c "CREATE DATABASE dbridge_test;"
 	psql -U postgres -d dbridge_test -f test/fixtures/sample_data.sql
 	@echo "✓ Test database ready"
+
+###################
+# Docker
+###################
+
+.PHONY: docker-up
+docker-up: docker-certs ## Start all Docker test containers
+	@echo "Starting Docker test containers..."
+	docker compose up -d --wait
+	@echo "✓ All containers healthy"
+
+.PHONY: docker-down
+docker-down: ## Stop and remove Docker test containers
+	@echo "Stopping Docker test containers..."
+	docker compose down -v
+	@echo "✓ Containers removed"
+
+.PHONY: docker-certs
+docker-certs: ## Generate SSL certs for Docker (if not present)
+	@./test/docker/ssl/generate-certs.sh
+
+.PHONY: docker-logs
+docker-logs: ## Follow Docker container logs
+	docker compose logs -f
 
 ###################
 # Cleanup

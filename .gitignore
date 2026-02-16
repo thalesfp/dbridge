@@ -41,9 +41,16 @@ build/
 *.yml
 !.github/**/*.yml
 !.github/**/*.yaml
+!docker-compose.yml
 config.yaml
 config.yml
 credentials.enc
+
+# Generated SSL certs
+test/docker/ssl/certs/
+
+# Claude Code
+CLAUDE.md
 
 # Logs
 *.log

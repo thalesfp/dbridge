@@ -1,0 +1,96 @@
+services:
+  dbridge-primary:
+    image: postgres:16-alpine
+    container_name: dbridge-primary
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5440:5432"
+    volumes:
+      - ./test/fixtures/sample_data.sql:/docker-entrypoint-initdb.d/01_sample_data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dbridge-test
+
+  dbridge-trust:
+    image: postgres:16-alpine
+    container_name: dbridge-trust
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: postgres
+    ports:
+      - "5441:5432"
+    volumes:
+      - ./test/fixtures/sample_data.sql:/docker-entrypoint-initdb.d/01_sample_data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dbridge-test
+
+  dbridge-ssl:
+    image: postgres:16-alpine
+    container_name: dbridge-ssl
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5442:5432"
+    volumes:
+      - ./test/fixtures/sample_data.sql:/docker-entrypoint-initdb.d/01_sample_data.sql:ro
+      - ./test/docker/ssl/certs/server.crt:/tmp/certs/server.crt:ro
+      - ./test/docker/ssl/certs/server.key:/tmp/certs/server.key:ro
+      - ./test/docker/ssl/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        cp /tmp/certs/server.crt /tmp/server.crt
+        cp /tmp/certs/server.key /tmp/server.key
+        chown postgres:postgres /tmp/server.crt /tmp/server.key
+        chmod 600 /tmp/server.key
+        exec docker-entrypoint.sh postgres \
+          -c ssl=on \
+          -c ssl_cert_file=/tmp/server.crt \
+          -c ssl_key_file=/tmp/server.key \
+          -c hba_file=/etc/postgresql/pg_hba.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dbridge-test
+
+  dbridge-rich:
+    image: postgres:16-alpine
+    container_name: dbridge-rich
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5443:5432"
+    volumes:
+      - ./test/fixtures/rich_schema.sql:/docker-entrypoint-initdb.d/01_rich_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dbridge-test
+
+networks:
+  dbridge-test:
+    driver: bridge

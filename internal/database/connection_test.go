@@ -381,6 +381,10 @@ func TestExplainResult(t *testing.T) {
 // rejects write operations at the database level.
 // Set TEST_DATABASE_URL to run (e.g. postgres://user:pass@localhost:5432/testdb?sslmode=disable).
 func TestReadOnlyConnection_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL not set, skipping integration test")
