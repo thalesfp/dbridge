@@ -40,6 +40,7 @@ type SafetyConfig struct {
 
 // Profile represents a database connection profile
 type Profile struct {
+	Driver   string `mapstructure:"driver" yaml:"driver,omitempty"`
 	Name     string `mapstructure:"name" yaml:"name"`
 	Host     string `mapstructure:"host" yaml:"host"`
 	Port     int    `mapstructure:"port" yaml:"port"`
@@ -48,6 +49,22 @@ type Profile struct {
 	SSLMode  string `mapstructure:"ssl_mode" yaml:"ssl_mode"`
 	ReadOnly bool   `mapstructure:"readonly" yaml:"readonly"` // Always true for now (v1.0 is read-only)
 	Disabled bool   `mapstructure:"disabled" yaml:"disabled"`
+}
+
+// DriverDefaults holds default port and SSL mode for a database driver.
+type DriverDefaults struct {
+	Port    int
+	SSLMode string
+}
+
+var driverDefaults = map[string]DriverDefaults{
+	"postgres": {5432, "require"},
+	"mysql":    {3306, "preferred"},
+}
+
+// DriverDefaultsMap returns the driver defaults map for external use.
+func DriverDefaultsMap() map[string]DriverDefaults {
+	return driverDefaults
 }
 
 // DefaultConfig returns the default configuration
@@ -153,12 +170,22 @@ func (c *Config) GetProfile(name string) (*Profile, error) {
 		return nil, fmt.Errorf("profile '%s' not found", name)
 	}
 
-	// Apply defaults if not set
+	// Default empty driver to postgres (backward compat for pre-multi-driver profiles)
+	if profile.Driver == "" {
+		profile.Driver = "postgres"
+	}
+
+	// Apply driver-specific defaults
+	defaults, ok := driverDefaults[profile.Driver]
+	if !ok {
+		// Unknown or empty driver: use postgres defaults for port/ssl
+		defaults = driverDefaults["postgres"]
+	}
 	if profile.Port == 0 {
-		profile.Port = 5432
+		profile.Port = defaults.Port
 	}
 	if profile.SSLMode == "" {
-		profile.SSLMode = "require"
+		profile.SSLMode = defaults.SSLMode
 	}
 
 	return profile, nil

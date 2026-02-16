@@ -7,10 +7,12 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/thalesfp/dbridge/internal/config"
 )
 
 // ProfileData holds the form input values
 type ProfileData struct {
+	Driver   string
 	Name     string
 	Database string
 	Host     string
@@ -23,17 +25,26 @@ type ProfileData struct {
 // NewProfileForm creates an interactive form for profile creation
 func NewProfileForm(initialName string) (*ProfileData, error) {
 	data := &ProfileData{
-		Name:     initialName,
-		Host:     "localhost", // Default
-		Port:     5432,        // Default
-		SSLMode:  "prefer",    // Default
+		Driver:  "postgres",
+		Name:    initialName,
+		Host:    "localhost",
+		Port:    5432,
+		SSLMode: "prefer",
 	}
 
-	// Convert int fields to strings for form input
 	portStr := "5432"
 
-	// Group 1: Profile Identification
+	// Group 1: Driver & Profile Identification
 	group1 := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Database Driver").
+			Description("Type of database to connect to").
+			Options(
+				huh.NewOption("PostgreSQL", "postgres"),
+				huh.NewOption("MySQL", "mysql"),
+			).
+			Value(&data.Driver),
+
 		huh.NewInput().
 			Title("Profile Name").
 			Description("Unique identifier for this database profile").
@@ -43,11 +54,11 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 
 		huh.NewInput().
 			Title("Database Name").
-			Description("Name of the PostgreSQL database").
+			Description("Name of the database").
 			Placeholder("myapp_production").
 			Value(&data.Database).
 			Validate(validateNotEmpty("Database name")),
-	).Title("📋 Profile Identification (Step 1/3)")
+	).Title("Profile Identification (Step 1/3)")
 
 	// Group 2: Connection Details
 	group2 := huh.NewGroup(
@@ -60,7 +71,7 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 
 		huh.NewInput().
 			Title("Database Port").
-			Description("PostgreSQL port number (typically 5432)").
+			Description("Database port number").
 			Placeholder("5432").
 			Value(&portStr).
 			Validate(validatePort),
@@ -71,9 +82,9 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 			Placeholder("postgres").
 			Value(&data.Username).
 			Validate(validateNotEmpty("Username")),
-	).Title("🔌 Connection Details (Step 2/3)")
+	).Title("Connection Details (Step 2/3)")
 
-	// Group 3: Security & Performance
+	// Group 3: Security
 	group3 := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("SSL Mode").
@@ -87,16 +98,14 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 
 		huh.NewInput().
 			Title("Password").
-			Description("Database password (optional - leave empty for trust/peer/cert auth)").
-			EchoMode(huh.EchoModePassword). // Hidden input with bullets
+			Description("Database password (optional - leave empty for passwordless auth)").
+			EchoMode(huh.EchoModePassword).
 			Value(&data.Password),
-	).Title("🔐 Security (Step 3/3)")
+	).Title("Security (Step 3/3)")
 
-	// Create form with all groups
 	form := huh.NewForm(group1, group2, group3).
 		WithTheme(CustomTheme())
 
-	// Run the form (blocks until completion or Ctrl+C)
 	err := form.Run()
 	if err != nil {
 		return nil, err
@@ -124,15 +133,31 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 		}
 	}
 
-	// Convert string inputs back to integers
 	data.Port, _ = strconv.Atoi(portStr)
+
+	// Apply driver-specific defaults when user switched driver but left port/SSL unchanged
+	if data.Driver != "postgres" {
+		if defaults, ok := config.DriverDefaultsMap()[data.Driver]; ok {
+			if data.Port == 5432 {
+				data.Port = defaults.Port
+			}
+			if data.SSLMode == "prefer" {
+				data.SSLMode = defaults.SSLMode
+			}
+		}
+	}
 
 	return data, nil
 }
 
 // NewProfileFormWithDefaults creates a form pre-filled with provided values
-func NewProfileFormWithDefaults(name, database, host string, port int, username, sslMode string, password string) (*ProfileData, error) {
+func NewProfileFormWithDefaults(driver, name, database, host string, port int, username, sslMode string, password string) (*ProfileData, error) {
+	if driver == "" {
+		driver = "postgres"
+	}
+
 	data := &ProfileData{
+		Driver:   driver,
 		Name:     name,
 		Database: database,
 		Host:     host,
@@ -142,11 +167,19 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 		Password: password,
 	}
 
-	// Convert int fields to strings for form input
 	portStr := strconv.Itoa(port)
 
-	// Group 1: Profile Identification
+	// Group 1: Driver & Profile Identification
 	group1 := huh.NewGroup(
+		huh.NewSelect[string]().
+			Title("Database Driver").
+			Description("Type of database to connect to").
+			Options(
+				huh.NewOption("PostgreSQL", "postgres"),
+				huh.NewOption("MySQL", "mysql"),
+			).
+			Value(&data.Driver),
+
 		huh.NewInput().
 			Title("Profile Name").
 			Description("Unique identifier for this database profile").
@@ -156,11 +189,11 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 
 		huh.NewInput().
 			Title("Database Name").
-			Description("Name of the PostgreSQL database").
+			Description("Name of the database").
 			Placeholder("myapp_production").
 			Value(&data.Database).
 			Validate(validateNotEmpty("Database name")),
-	).Title("📋 Profile Identification (Step 1/3)")
+	).Title("Profile Identification (Step 1/3)")
 
 	// Group 2: Connection Details
 	group2 := huh.NewGroup(
@@ -173,7 +206,7 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 
 		huh.NewInput().
 			Title("Database Port").
-			Description("PostgreSQL port number (typically 5432)").
+			Description("Database port number").
 			Placeholder("5432").
 			Value(&portStr).
 			Validate(validatePort),
@@ -184,9 +217,9 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 			Placeholder("postgres").
 			Value(&data.Username).
 			Validate(validateNotEmpty("Username")),
-	).Title("🔌 Connection Details (Step 2/3)")
+	).Title("Connection Details (Step 2/3)")
 
-	// Group 3: Security & Performance
+	// Group 3: Security
 	group3 := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("SSL Mode").
@@ -200,16 +233,14 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 
 		huh.NewInput().
 			Title("Password").
-			Description("Database password (optional - leave empty for trust/peer/cert auth)").
+			Description("Database password (optional - leave empty for passwordless auth)").
 			EchoMode(huh.EchoModePassword).
 			Value(&data.Password),
-	).Title("🔐 Security (Step 3/3)")
+	).Title("Security (Step 3/3)")
 
-	// Create form with all groups
 	form := huh.NewForm(group1, group2, group3).
 		WithTheme(CustomTheme())
 
-	// Run the form
 	err := form.Run()
 	if err != nil {
 		return nil, err
@@ -237,8 +268,19 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 		}
 	}
 
-	// Convert string inputs back to integers
 	data.Port, _ = strconv.Atoi(portStr)
+
+	// Apply driver-specific defaults when user switched driver but left port/SSL unchanged
+	if data.Driver != driver {
+		if defaults, ok := config.DriverDefaultsMap()[data.Driver]; ok {
+			if data.Port == port {
+				data.Port = defaults.Port
+			}
+			if data.SSLMode == sslMode {
+				data.SSLMode = defaults.SSLMode
+			}
+		}
+	}
 
 	return data, nil
 }

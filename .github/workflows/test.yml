@@ -8,12 +8,8 @@ on:
 
 jobs:
   test:
-    name: Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        go: ['1.23']
+    name: Unit Tests
+    runs-on: spk9-server
 
     steps:
     - name: Checkout code
@@ -22,23 +18,54 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go }}
+        go-version: '1.23'
 
     - name: Download dependencies
       run: go mod download
 
-    - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+    - name: Run unit tests
+      run: go test -v -short -race -coverprofile=coverage.out -covermode=atomic ./...
 
     - name: Upload coverage
-      if: matrix.os == 'ubuntu-latest'
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.out
 
+  test-integration:
+    name: Integration Tests
+    runs-on: spk9-server
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Generate SSL certs
+      run: ./test/docker/ssl/generate-certs.sh
+
+    - name: Start test containers
+      run: docker compose up -d --wait
+
+    - name: Run integration tests
+      run: |
+        TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5440/postgres?sslmode=disable" \
+        TEST_MYSQL_URL="dbridge:dbridge@tcp(localhost:3340)/dbridge_test" \
+        go test -v -race -run Integration ./...
+
+    - name: Stop test containers
+      if: always()
+      run: docker compose down -v
+
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: spk9-server
 
     steps:
     - name: Checkout code
@@ -56,10 +83,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: spk9-server
 
     steps:
     - name: Checkout code
@@ -71,4 +95,4 @@ jobs:
         go-version: '1.23'
 
     - name: Build
-      run: go build -v ./cmd/dbbridge
+      run: go build -v ./cmd/dbridge

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"syscall"
 
 	"github.com/charmbracelet/huh"
@@ -13,7 +14,7 @@ import (
 	"github.com/thalesfp/dbridge/internal/cli/output"
 	"github.com/thalesfp/dbridge/internal/config"
 	"github.com/thalesfp/dbridge/internal/credentials"
-	"github.com/thalesfp/dbridge/internal/database"
+	dbpkg "github.com/thalesfp/dbridge/internal/database"
 	"golang.org/x/term"
 )
 
@@ -38,6 +39,7 @@ func NewConfigCmd() *cobra.Command {
 // newConfigAddCmd creates the 'config add' command
 func newConfigAddCmd() *cobra.Command {
 	var (
+		driver         string
 		host           string
 		port           int
 		database       string
@@ -81,7 +83,7 @@ Examples:
 			formatter := getFormatter(cmd)
 
 			// Check if any flags were explicitly set (flag-based mode)
-			flagMode := cmd.Flags().Changed("database") || cmd.Flags().Changed("username")
+			flagMode := cmd.Flags().Changed("database") || cmd.Flags().Changed("username") || cmd.Flags().Changed("driver")
 
 			// Default (JSON) mode requires flag mode (no interactive TUI)
 			if !formatter.HumanMode && !flagMode {
@@ -101,6 +103,20 @@ Examples:
 				profileName := args[0]
 
 				// Validate required fields
+				if driver == "" {
+					return fmt.Errorf("--driver is required (postgres, mysql)")
+				}
+				validDrivers := dbpkg.DriverNames()
+				driverValid := false
+				for _, d := range validDrivers {
+					if driver == d {
+						driverValid = true
+						break
+					}
+				}
+				if !driverValid {
+					return fmt.Errorf("unsupported driver %q, must be one of: %s", driver, strings.Join(validDrivers, ", "))
+				}
 				if database == "" {
 					return fmt.Errorf("--database is required")
 				}
@@ -139,15 +155,18 @@ Examples:
 					}
 				}
 
-				// Apply defaults
-				if port == 0 {
-					port = 5432
-				}
-				if sslMode == "" {
-					sslMode = "prefer"
+				// Apply driver-aware defaults
+				if defaults, ok := config.DriverDefaultsMap()[driver]; ok {
+					if !cmd.Flags().Changed("port") {
+						port = defaults.Port
+					}
+					if !cmd.Flags().Changed("ssl-mode") {
+						sslMode = defaults.SSLMode
+					}
 				}
 
 				profileData = &form.ProfileData{
+					Driver:   driver,
 					Name:     profileName,
 					Host:     host,
 					Port:     port,
@@ -177,6 +196,7 @@ Examples:
 
 			// Create profile
 			profile := &config.Profile{
+				Driver:   profileData.Driver,
 				Name:     profileData.Name,
 				Host:     profileData.Host,
 				Port:     profileData.Port,
@@ -252,6 +272,7 @@ Examples:
 
 				data := map[string]interface{}{
 					"profile": map[string]interface{}{
+						"driver":    profileData.Driver,
 						"name":      profileData.Name,
 						"host":      profileData.Host,
 						"port":      profileData.Port,
@@ -321,12 +342,13 @@ Examples:
 	}
 
 	// Add flags for non-interactive mode
+	cmd.Flags().StringVar(&driver, "driver", "", "Database driver (postgres, mysql) — required")
 	cmd.Flags().StringVar(&host, "host", "localhost", "Database host")
-	cmd.Flags().IntVar(&port, "port", 5432, "Database port")
+	cmd.Flags().IntVar(&port, "port", 0, "Database port (default: driver-specific)")
 	cmd.Flags().StringVar(&database, "database", "", "Database name (required for flag mode)")
 	cmd.Flags().StringVar(&username, "username", "", "Database username (required for flag mode)")
 	cmd.Flags().StringVar(&password, "password", "", "Database password (optional, will prompt if not provided)")
-	cmd.Flags().StringVar(&sslMode, "ssl-mode", "prefer", "SSL mode (disable, require, prefer)")
+	cmd.Flags().StringVar(&sslMode, "ssl-mode", "", "SSL mode (default: driver-specific)")
 	cmd.Flags().BoolVar(&readOnly, "readonly", true, "Read-only mode")
 	cmd.Flags().BoolVar(&testConnection, "test-connection", false, "Test the database connection after adding the profile")
 
@@ -402,7 +424,12 @@ func newConfigListCmd() *cobra.Command {
 			if !formatter.HumanMode {
 				profiles := make([]map[string]interface{}, 0, len(cfg.Profiles))
 				for name, profile := range cfg.Profiles {
+					driver := profile.Driver
+					if driver == "" {
+						driver = "postgres"
+					}
 					profiles = append(profiles, map[string]interface{}{
+						"driver":     driver,
 						"name":       name,
 						"host":       profile.Host,
 						"port":       profile.Port,
@@ -474,6 +501,7 @@ func newConfigShowCmd() *cobra.Command {
 			if !formatter.HumanMode {
 				data := map[string]interface{}{
 					"profile": map[string]interface{}{
+						"driver":     profile.Driver,
 						"name":       profile.Name,
 						"host":       profile.Host,
 						"port":       profile.Port,
@@ -491,6 +519,7 @@ func newConfigShowCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Profile: %s\n", profile.Name)
+			fmt.Printf("Driver: %s\n", profile.Driver)
 			fmt.Printf("Host: %s\n", profile.Host)
 			fmt.Printf("Port: %d\n", profile.Port)
 			fmt.Printf("Database: %s\n", profile.Database)
@@ -625,6 +654,7 @@ Examples:
 
 			// Launch form pre-filled with source profile data
 			profileData, err := form.NewProfileFormWithDefaults(
+				sourceProfile.Driver,
 				newProfileName,
 				sourceProfile.Database,
 				sourceProfile.Host,
@@ -639,6 +669,7 @@ Examples:
 
 			// Create new profile
 			newProfile := &config.Profile{
+				Driver:   profileData.Driver,
 				Name:     profileData.Name,
 				Host:     profileData.Host,
 				Port:     profileData.Port,
@@ -703,6 +734,7 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 
 	// Launch form pre-filled with existing data
 	profileData, err := form.NewProfileFormWithDefaults(
+		existingProfile.Driver,
 		existingProfile.Name,
 		existingProfile.Database,
 		existingProfile.Host,
@@ -728,6 +760,7 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 
 	// Update profile
 	updatedProfile := &config.Profile{
+		Driver:   profileData.Driver,
 		Name:     profileData.Name,
 		Host:     profileData.Host,
 		Port:     profileData.Port,
@@ -899,8 +932,12 @@ func buildProfileOptions(cfg *config.Config) []huh.Option[string] {
 			icon = "✗"
 			status = "disabled"
 		}
-		label := fmt.Sprintf("%s %s - %s:%d/%s (%s)",
-			icon, name, profile.Host, profile.Port, profile.Database, status)
+		driverTag := profile.Driver
+		if driverTag == "" {
+			driverTag = "postgres"
+		}
+		label := fmt.Sprintf("%s %s - %s:%d/%s [%s] (%s)",
+			icon, name, profile.Host, profile.Port, profile.Database, driverTag, status)
 		options = append(options, huh.NewOption(label, name))
 	}
 	return options
@@ -985,7 +1022,8 @@ func (r *connectionTestResult) toMap() map[string]interface{} {
 
 // runConnectionTest tests a database connection using the given profile data
 func runConnectionTest(ctx context.Context, data *form.ProfileData) *connectionTestResult {
-	connConfig := &database.ConnectionConfig{
+	connConfig := &dbpkg.ConnectionConfig{
+		Driver:   data.Driver,
 		Host:     data.Host,
 		Port:     data.Port,
 		Database: data.Database,
@@ -994,7 +1032,7 @@ func runConnectionTest(ctx context.Context, data *form.ProfileData) *connectionT
 		SSLMode:  data.SSLMode,
 		ReadOnly: true,
 	}
-	conn, err := database.NewConnection(ctx, connConfig)
+	conn, err := dbpkg.NewConnection(ctx, connConfig)
 	if err != nil {
 		return &connectionTestResult{Success: false, Error: err.Error()}
 	}

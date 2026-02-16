@@ -310,6 +310,104 @@ func TestToggleProfileDisabled(t *testing.T) {
 	}
 }
 
+// TestGetProfile_DriverDefaults tests driver-specific defaults
+func TestGetProfile_DriverDefaults(t *testing.T) {
+	t.Run("postgres driver defaults to port 5432", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.AddProfile(&Profile{
+			Name:     "pg-db",
+			Driver:   "postgres",
+			Host:     "localhost",
+			Database: "testdb",
+			Username: "user",
+		})
+
+		p, err := cfg.GetProfile("pg-db")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if p.Port != 5432 {
+			t.Errorf("Expected port 5432, got %d", p.Port)
+		}
+		if p.SSLMode != "require" {
+			t.Errorf("Expected ssl 'require', got '%s'", p.SSLMode)
+		}
+	})
+
+	t.Run("empty driver falls back to postgres port/ssl defaults", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.AddProfile(&Profile{
+			Name:     "legacy-db",
+			Host:     "localhost",
+			Database: "testdb",
+			Username: "user",
+		})
+
+		p, err := cfg.GetProfile("legacy-db")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if p.Driver != "postgres" {
+			t.Errorf("Expected driver 'postgres', got '%s'", p.Driver)
+		}
+		if p.Port != 5432 {
+			t.Errorf("Expected port 5432, got %d", p.Port)
+		}
+		if p.SSLMode != "require" {
+			t.Errorf("Expected ssl 'require', got '%s'", p.SSLMode)
+		}
+	})
+
+	t.Run("mysql driver defaults to port 3306", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.AddProfile(&Profile{
+			Name:     "my-db",
+			Driver:   "mysql",
+			Host:     "localhost",
+			Database: "testdb",
+			Username: "user",
+		})
+
+		p, err := cfg.GetProfile("my-db")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if p.Driver != "mysql" {
+			t.Errorf("Expected driver 'mysql', got '%s'", p.Driver)
+		}
+		if p.Port != 3306 {
+			t.Errorf("Expected port 3306, got %d", p.Port)
+		}
+		if p.SSLMode != "preferred" {
+			t.Errorf("Expected ssl 'preferred', got '%s'", p.SSLMode)
+		}
+	})
+
+	t.Run("explicit port and ssl override driver defaults", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.AddProfile(&Profile{
+			Name:     "custom-db",
+			Driver:   "mysql",
+			Host:     "localhost",
+			Port:     3307,
+			Database: "testdb",
+			Username: "user",
+			SSLMode:  "disable",
+		})
+
+		p, err := cfg.GetProfile("custom-db")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if p.Port != 3307 {
+			t.Errorf("Expected port 3307, got %d", p.Port)
+		}
+		if p.SSLMode != "disable" {
+			t.Errorf("Expected ssl 'disable', got '%s'", p.SSLMode)
+		}
+	})
+}
+
 // TestGetProfileStillWorksWhenDisabled tests that GetProfile returns disabled profiles
 func TestGetProfileStillWorksWhenDisabled(t *testing.T) {
 	cfg := DefaultConfig()

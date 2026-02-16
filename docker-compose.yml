@@ -91,6 +91,26 @@ services:
     networks:
       - dbridge-test
 
+  dbridge-mysql-primary:
+    image: mysql:8.0
+    container_name: dbridge-mysql-primary
+    environment:
+      MYSQL_USER: dbridge
+      MYSQL_PASSWORD: dbridge
+      MYSQL_DATABASE: dbridge_test
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3340:3306"
+    volumes:
+      - ./test/fixtures/mysql_sample_data.sql:/docker-entrypoint-initdb.d/01_sample_data.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dbridge-test
+
 networks:
   dbridge-test:
     driver: bridge

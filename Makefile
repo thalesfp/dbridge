@@ -44,6 +44,7 @@ test: ## Run unit tests
 .PHONY: test-integration
 test-integration: ## Run integration tests (requires docker-up)
 	TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5440/postgres?sslmode=disable" \
+	TEST_MYSQL_URL="dbridge:dbridge@tcp(localhost:3340)/dbridge_test" \
 		go test -v -run Integration ./...
 
 .PHONY: test-coverage

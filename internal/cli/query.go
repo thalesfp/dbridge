@@ -58,6 +58,7 @@ Examples:
 
 			// Create database connection
 			connConfig := &database.ConnectionConfig{
+				Driver:   profileConfig.Driver,
 				Host:     profileConfig.Host,
 				Port:     profileConfig.Port,
 				Database: profileConfig.Database,

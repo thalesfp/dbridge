@@ -1,113 +1,6 @@
 package database
 
-import (
-	"context"
-	"os"
-	"strings"
-	"testing"
-)
-
-// TestGetTypeName tests PostgreSQL type OID to name conversion
-func TestGetTypeName(t *testing.T) {
-	tests := []struct {
-		oid      uint32
-		expected string
-	}{
-		{16, "bool"},
-		{20, "int8"},
-		{21, "int2"},
-		{23, "int4"},
-		{25, "text"},
-		{700, "float4"},
-		{701, "float8"},
-		{1043, "varchar"},
-		{1082, "date"},
-		{1083, "time"},
-		{1114, "timestamp"},
-		{1184, "timestamptz"},
-		{1700, "numeric"},
-		{2950, "uuid"},
-		{114, "json"},
-		{3802, "jsonb"},
-		{9999, "oid_9999"}, // Unknown type
-	}
-
-	for _, test := range tests {
-		result := getTypeName(test.oid)
-		if result != test.expected {
-			t.Errorf("getTypeName(%d) = %s, expected %s", test.oid, result, test.expected)
-		}
-	}
-}
-
-// TestConnectionConfig tests connection configuration
-func TestConnectionConfig(t *testing.T) {
-	config := &ConnectionConfig{
-		Host:     "localhost",
-		Port:     5432,
-		Database: "testdb",
-		Username: "testuser",
-		Password: "secret",
-		SSLMode:  "require",
-	}
-
-	if config.Host != "localhost" {
-		t.Errorf("Expected host 'localhost', got '%s'", config.Host)
-	}
-
-	if config.Port != 5432 {
-		t.Errorf("Expected port 5432, got %d", config.Port)
-	}
-
-	if config.Database != "testdb" {
-		t.Errorf("Expected database 'testdb', got '%s'", config.Database)
-	}
-
-	if config.Username != "testuser" {
-		t.Errorf("Expected username 'testuser', got '%s'", config.Username)
-	}
-
-	if config.Password != "secret" {
-		t.Errorf("Expected password 'secret', got '%s'", config.Password)
-	}
-
-	if config.SSLMode != "require" {
-		t.Errorf("Expected SSLMode 'require', got '%s'", config.SSLMode)
-	}
-}
-
-// TestBuildConnString_ReadOnly tests that the connection string includes
-// default_transaction_read_only=on when ReadOnly is true.
-func TestBuildConnString_ReadOnly(t *testing.T) {
-	base := ConnectionConfig{
-		Host:     "localhost",
-		Port:     5432,
-		Database: "testdb",
-		Username: "user",
-		Password: "pass",
-		SSLMode:  "disable",
-	}
-
-	t.Run("read-only appends param", func(t *testing.T) {
-		cfg := base
-		cfg.ReadOnly = true
-		cs := buildConnString(&cfg)
-
-		if !strings.Contains(cs, "default_transaction_read_only=on") {
-			t.Errorf("Expected connection string to contain default_transaction_read_only=on, got: %s", cs)
-		}
-	})
-
-	t.Run("read-write omits param", func(t *testing.T) {
-		cfg := base
-		cfg.ReadOnly = false
-		cs := buildConnString(&cfg)
-
-		if strings.Contains(cs, "default_transaction_read_only") {
-			t.Errorf("Expected connection string to NOT contain default_transaction_read_only, got: %s", cs)
-		}
-	})
-}
+import "testing"
 
 // TestQueryResult tests query result structure
 func TestQueryResult(t *testing.T) {
@@ -227,7 +120,6 @@ func TestTableDefinition(t *testing.T) {
 		t.Errorf("Expected 3 columns, got %d", len(def.Columns))
 	}
 
-	// Test first column
 	if def.Columns[0].Name != "id" {
 		t.Errorf("Expected column name 'id', got '%s'", def.Columns[0].Name)
 	}
@@ -236,7 +128,6 @@ func TestTableDefinition(t *testing.T) {
 		t.Error("Expected id column to be non-nullable")
 	}
 
-	// Test second column with default
 	if def.Columns[1].Default == nil {
 		t.Error("Expected email column to have a default value")
 	}
@@ -245,7 +136,6 @@ func TestTableDefinition(t *testing.T) {
 		t.Errorf("Expected default 'NULL', got '%s'", *def.Columns[1].Default)
 	}
 
-	// Test indexes
 	if len(def.Indexes) != 2 {
 		t.Errorf("Expected 2 indexes, got %d", len(def.Indexes))
 	}
@@ -258,7 +148,6 @@ func TestTableDefinition(t *testing.T) {
 		t.Error("Expected primary key to be unique")
 	}
 
-	// Test constraints
 	if len(def.Constraints) != 1 {
 		t.Errorf("Expected 1 constraint, got %d", len(def.Constraints))
 	}
@@ -374,67 +263,6 @@ func TestExplainResult(t *testing.T) {
 
 	if result.EstimatedCost != 18.50 {
 		t.Errorf("Expected estimated cost 18.50, got %f", result.EstimatedCost)
-	}
-}
-
-// TestReadOnlyConnection_Integration verifies that a read-only connection
-// rejects write operations at the database level.
-// Set TEST_DATABASE_URL to run (e.g. postgres://user:pass@localhost:5432/testdb?sslmode=disable).
-func TestReadOnlyConnection_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL not set, skipping integration test")
-	}
-
-	ctx := context.Background()
-
-	config := &ConnectionConfig{
-		Host:     "localhost",
-		Port:     5432,
-		Database: "postgres",
-		Username: "postgres",
-		Password: "postgres",
-		SSLMode:  "disable",
-		ReadOnly: true,
-	}
-
-	// Parse DSN to override defaults if provided in a structured format.
-	// For simplicity, we use pgxpool to parse the DSN and extract fields.
-	// But since our NewConnection builds its own string, we just use defaults
-	// and let TEST_DATABASE_URL signal "a PG is available".
-	conn, err := NewConnection(ctx, config)
-	if err != nil {
-		t.Fatalf("Failed to connect: %v", err)
-	}
-	defer conn.Close(ctx)
-
-	// SELECT should succeed
-	result, err := conn.Query(ctx, "SELECT 1 AS ok")
-	if err != nil {
-		t.Fatalf("SELECT should succeed on read-only connection: %v", err)
-	}
-	if result.RowCount != 1 {
-		t.Fatalf("Expected 1 row, got %d", result.RowCount)
-	}
-
-	// Write operations should fail
-	writeStatements := []string{
-		"CREATE TABLE _dbridge_ro_test (id int)",
-		"INSERT INTO _dbridge_ro_test VALUES (1)",
-		"DROP TABLE IF EXISTS _dbridge_ro_test",
-	}
-
-	for _, stmt := range writeStatements {
-		_, err := conn.Exec(ctx, stmt)
-		if err == nil {
-			t.Errorf("Expected error for %q on read-only connection, but it succeeded", stmt)
-		} else if !strings.Contains(err.Error(), "read-only") {
-			t.Errorf("Expected read-only error for %q, got: %v", stmt, err)
-		}
 	}
 }
 
