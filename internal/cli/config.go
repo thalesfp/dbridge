@@ -388,9 +388,8 @@ func newConfigListCmd() *cobra.Command {
 			if len(cfg.Profiles) == 0 {
 				if !formatter.HumanMode {
 					return formatter.Success("config_list", map[string]interface{}{
-						"profiles":        []interface{}{},
-						"default_profile": "",
-						"total_count":     0,
+						"profiles":    []interface{}{},
+						"total_count": 0,
 					}, "No profiles configured")
 				}
 
@@ -410,24 +409,17 @@ func newConfigListCmd() *cobra.Command {
 						"username":   profile.Username,
 						"ssl_mode":   profile.SSLMode,
 						"read_only":  profile.ReadOnly,
-						"is_default": name == cfg.Settings.DefaultProfile,
 					})
 				}
 
 				return formatter.Success("config_list", map[string]interface{}{
 					"profiles":        profiles,
-					"default_profile": cfg.Settings.DefaultProfile,
 					"total_count":     len(cfg.Profiles),
 				}, fmt.Sprintf("Found %d profile(s)", len(cfg.Profiles)))
 			}
 
 			fmt.Println("Profiles:")
 			for name, profile := range cfg.Profiles {
-				marker := ""
-				if name == cfg.Settings.DefaultProfile {
-					marker = " (default)"
-				}
-
 				readOnlyMarker := ""
 				if profile.ReadOnly {
 					readOnlyMarker = " [read-only]"
@@ -435,9 +427,8 @@ func newConfigListCmd() *cobra.Command {
 					readOnlyMarker = " [read-write]"
 				}
 
-				fmt.Printf("  %s%s - %s:%d/%s%s\n",
+				fmt.Printf("  %s - %s:%d/%s%s\n",
 					name,
-					marker,
 					profile.Host,
 					profile.Port,
 					profile.Database,
@@ -485,7 +476,6 @@ func newConfigShowCmd() *cobra.Command {
 						"username":   profile.Username,
 						"ssl_mode":   profile.SSLMode,
 						"read_only":  profile.ReadOnly,
-						"is_default": profile.Name == cfg.Settings.DefaultProfile,
 					},
 					"has_credentials": true,
 				}

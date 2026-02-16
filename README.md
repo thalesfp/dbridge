@@ -85,7 +85,6 @@ Configuration file: `~/.config/dbridge/config.yaml`
 
 ```yaml
 settings:
-  default_profile: "local"
   output:
     default: "auto"          # auto, compact, table, csv
     auto_detect_tty: true    # Auto-switch based on TTY

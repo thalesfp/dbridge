@@ -16,11 +16,10 @@ type Config struct {
 
 // Settings holds global application settings
 type Settings struct {
-	DefaultProfile string       `mapstructure:"default_profile" yaml:"default_profile"`
-	Output         OutputConfig `mapstructure:"output" yaml:"output"`
-	Safety         SafetyConfig `mapstructure:"safety" yaml:"safety"`
-	AuditLog       bool         `mapstructure:"audit_log" yaml:"audit_log"`
-	AuditLogPath   string       `mapstructure:"audit_log_path" yaml:"audit_log_path"`
+	Output       OutputConfig `mapstructure:"output" yaml:"output"`
+	Safety       SafetyConfig `mapstructure:"safety" yaml:"safety"`
+	AuditLog     bool         `mapstructure:"audit_log" yaml:"audit_log"`
+	AuditLogPath string       `mapstructure:"audit_log_path" yaml:"audit_log_path"`
 }
 
 // OutputConfig holds output format settings
@@ -54,7 +53,6 @@ type Profile struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Settings: Settings{
-			DefaultProfile: "local",
 			Output: OutputConfig{
 				Default:         "auto",
 				AutoDetectTTY:   true,
@@ -141,17 +139,12 @@ func (c *Config) AddProfile(profile *Profile) {
 		c.Profiles = make(map[string]*Profile)
 	}
 	c.Profiles[profile.Name] = profile
-
-	// Set as default if it's the first profile
-	if len(c.Profiles) == 1 {
-		c.Settings.DefaultProfile = profile.Name
-	}
 }
 
 // GetProfile retrieves a profile by name
 func (c *Config) GetProfile(name string) (*Profile, error) {
 	if name == "" {
-		name = c.Settings.DefaultProfile
+		return nil, fmt.Errorf("profile name is required")
 	}
 
 	profile, ok := c.Profiles[name]
@@ -177,19 +170,6 @@ func (c *Config) RemoveProfile(name string) error {
 	}
 
 	delete(c.Profiles, name)
-
-	// Update default if removed
-	if c.Settings.DefaultProfile == name {
-		if len(c.Profiles) > 0 {
-			// Set first available profile as default
-			for profileName := range c.Profiles {
-				c.Settings.DefaultProfile = profileName
-				break
-			}
-		} else {
-			c.Settings.DefaultProfile = ""
-		}
-	}
 
 	return nil
 }

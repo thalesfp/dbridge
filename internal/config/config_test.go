@@ -8,10 +8,6 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.Settings.DefaultProfile != "local" {
-		t.Errorf("Expected default profile 'local', got '%s'", cfg.Settings.DefaultProfile)
-	}
-
 	if cfg.Settings.Output.Default != "auto" {
 		t.Errorf("Expected output format 'auto', got '%s'", cfg.Settings.Output.Default)
 	}
@@ -71,11 +67,6 @@ func TestAddProfile(t *testing.T) {
 	if loadedProfile.Port != profile.Port {
 		t.Errorf("Expected port %d, got %d", profile.Port, loadedProfile.Port)
 	}
-
-	// First profile should become default
-	if cfg.Settings.DefaultProfile != "test-db" {
-		t.Errorf("Expected default profile 'test-db', got '%s'", cfg.Settings.DefaultProfile)
-	}
 }
 
 // TestGetProfile tests retrieving a profile
@@ -102,14 +93,10 @@ func TestGetProfile(t *testing.T) {
 		t.Errorf("Expected name %s, got %s", profile.Name, loadedProfile.Name)
 	}
 
-	// Get default profile (empty name)
-	defaultProfile, err := cfg.GetProfile("")
-	if err != nil {
-		t.Fatalf("Failed to get default profile: %v", err)
-	}
-
-	if defaultProfile.Name != profile.Name {
-		t.Errorf("Expected default profile %s, got %s", profile.Name, defaultProfile.Name)
+	// Empty name should return an error
+	_, err = cfg.GetProfile("")
+	if err == nil {
+		t.Error("Expected error when getting profile with empty name")
 	}
 }
 
@@ -157,11 +144,6 @@ func TestRemoveProfile(t *testing.T) {
 	if ok {
 		t.Error("Profile 'profile1' should be removed")
 	}
-
-	// Default should have changed
-	if cfg.Settings.DefaultProfile == "profile1" {
-		t.Error("Default profile should not be the removed profile")
-	}
 }
 
 // TestRemoveProfile_LastProfile tests removing the last profile
@@ -182,9 +164,8 @@ func TestRemoveProfile_LastProfile(t *testing.T) {
 		t.Fatalf("Failed to remove profile: %v", err)
 	}
 
-	// Default profile should be empty
-	if cfg.Settings.DefaultProfile != "" {
-		t.Errorf("Expected empty default profile, got '%s'", cfg.Settings.DefaultProfile)
+	if len(cfg.Profiles) != 0 {
+		t.Errorf("Expected 0 profiles, got %d", len(cfg.Profiles))
 	}
 }
 
