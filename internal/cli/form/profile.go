@@ -17,7 +17,6 @@ type ProfileData struct {
 	Port     int
 	Username string
 	SSLMode  string
-	PoolSize int
 	Password string
 }
 
@@ -28,12 +27,10 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 		Host:     "localhost", // Default
 		Port:     5432,        // Default
 		SSLMode:  "prefer",    // Default
-		PoolSize: 5,           // Default
 	}
 
 	// Convert int fields to strings for form input
 	portStr := "5432"
-	poolSizeStr := "5"
 
 	// Group 1: Profile Identification
 	group1 := huh.NewGroup(
@@ -89,22 +86,15 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 			Value(&data.SSLMode),
 
 		huh.NewInput().
-			Title("Connection Pool Size").
-			Description("Maximum number of database connections in pool").
-			Placeholder("5").
-			Value(&poolSizeStr).
-			Validate(validatePoolSize),
-
-		huh.NewInput().
 			Title("Password").
 			Description("Database password (optional - leave empty for trust/peer/cert auth)").
 			EchoMode(huh.EchoModePassword). // Hidden input with bullets
 			Value(&data.Password),
-	).Title("🔐 Security & Performance (Step 3/3)")
+	).Title("🔐 Security (Step 3/3)")
 
 	// Create form with all groups
 	form := huh.NewForm(group1, group2, group3).
-		WithTheme(customTheme())
+		WithTheme(CustomTheme())
 
 	// Run the form (blocks until completion or Ctrl+C)
 	err := form.Run()
@@ -126,7 +116,7 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 				}
 				return nil
 			}).
-			WithTheme(customTheme()).
+			WithTheme(CustomTheme()).
 			Run()
 
 		if confirmErr != nil {
@@ -136,13 +126,12 @@ func NewProfileForm(initialName string) (*ProfileData, error) {
 
 	// Convert string inputs back to integers
 	data.Port, _ = strconv.Atoi(portStr)
-	data.PoolSize, _ = strconv.Atoi(poolSizeStr)
 
 	return data, nil
 }
 
 // NewProfileFormWithDefaults creates a form pre-filled with provided values
-func NewProfileFormWithDefaults(name, database, host string, port int, username, sslMode string, poolSize int, password string) (*ProfileData, error) {
+func NewProfileFormWithDefaults(name, database, host string, port int, username, sslMode string, password string) (*ProfileData, error) {
 	data := &ProfileData{
 		Name:     name,
 		Database: database,
@@ -150,13 +139,11 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 		Port:     port,
 		Username: username,
 		SSLMode:  sslMode,
-		PoolSize: poolSize,
 		Password: password,
 	}
 
 	// Convert int fields to strings for form input
 	portStr := strconv.Itoa(port)
-	poolSizeStr := strconv.Itoa(poolSize)
 
 	// Group 1: Profile Identification
 	group1 := huh.NewGroup(
@@ -212,22 +199,15 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 			Value(&data.SSLMode),
 
 		huh.NewInput().
-			Title("Connection Pool Size").
-			Description("Maximum number of database connections in pool").
-			Placeholder("5").
-			Value(&poolSizeStr).
-			Validate(validatePoolSize),
-
-		huh.NewInput().
 			Title("Password").
 			Description("Database password (optional - leave empty for trust/peer/cert auth)").
 			EchoMode(huh.EchoModePassword).
 			Value(&data.Password),
-	).Title("🔐 Security & Performance (Step 3/3)")
+	).Title("🔐 Security (Step 3/3)")
 
 	// Create form with all groups
 	form := huh.NewForm(group1, group2, group3).
-		WithTheme(customTheme())
+		WithTheme(CustomTheme())
 
 	// Run the form
 	err := form.Run()
@@ -235,8 +215,8 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 		return nil, err
 	}
 
-	// Password confirmation (only if password was provided)
-	if data.Password != "" {
+	// Password confirmation (only if password was provided and changed from original)
+	if data.Password != "" && data.Password != password {
 		var confirmPassword string
 		confirmErr := huh.NewInput().
 			Title("Confirm Password").
@@ -249,7 +229,7 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 				}
 				return nil
 			}).
-			WithTheme(customTheme()).
+			WithTheme(CustomTheme()).
 			Run()
 
 		if confirmErr != nil {
@@ -259,7 +239,6 @@ func NewProfileFormWithDefaults(name, database, host string, port int, username,
 
 	// Convert string inputs back to integers
 	data.Port, _ = strconv.Atoi(portStr)
-	data.PoolSize, _ = strconv.Atoi(poolSizeStr)
 
 	return data, nil
 }
@@ -299,25 +278,8 @@ func validatePort(s string) error {
 	return nil
 }
 
-func validatePoolSize(s string) error {
-	if len(s) == 0 {
-		return fmt.Errorf("pool size cannot be empty")
-	}
-	size, err := strconv.Atoi(s)
-	if err != nil {
-		return fmt.Errorf("pool size must be a number")
-	}
-	if size < 1 {
-		return fmt.Errorf("pool size must be at least 1")
-	}
-	if size > 100 {
-		return fmt.Errorf("pool size seems too large (max recommended: 100)")
-	}
-	return nil
-}
-
-// customTheme returns a styled theme for the form
-func customTheme() *huh.Theme {
+// CustomTheme returns a styled theme for the form
+func CustomTheme() *huh.Theme {
 	t := huh.ThemeCharm()
 
 	t.Focused.Base = t.Focused.Base.Foreground(lipgloss.Color("205"))
