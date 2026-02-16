@@ -60,7 +60,6 @@ Examples:
 				Username: creds.Username,
 				Password: creds.Password,
 				SSLMode:  profileConfig.SSLMode,
-				PoolSize: profileConfig.PoolSize,
 				ReadOnly: profileConfig.ReadOnly,
 			}
 

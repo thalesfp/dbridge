@@ -23,55 +23,58 @@ type ErrorInfo struct {
 	Details interface{} `json:"details,omitempty"`
 }
 
-// Formatter handles output formatting (JSON or human-friendly)
+// Formatter handles output formatting (compact JSON by default, human-friendly with --human)
 type Formatter struct {
-	JSONMode bool
-	Writer   io.Writer
+	HumanMode bool
+	Writer    io.Writer
 }
 
 // NewFormatter creates a formatter instance
-func NewFormatter(jsonMode bool) *Formatter {
+func NewFormatter(humanMode bool) *Formatter {
 	return &Formatter{
-		JSONMode: jsonMode,
-		Writer:   os.Stdout,
+		HumanMode: humanMode,
+		Writer:    os.Stdout,
 	}
 }
 
 // Success outputs a success response
 func (f *Formatter) Success(operation string, data interface{}, message string) error {
-	if f.JSONMode {
-		return f.outputJSON(Response{
-			Success:   true,
-			Operation: operation,
-			Data:      data,
-			Message:   message,
-		})
+	if f.HumanMode {
+		// Human-friendly output with checkmark
+		fmt.Fprintf(f.Writer, "✓ %s\n", message)
+		return nil
 	}
-	// Human-friendly output with checkmark
-	fmt.Fprintf(f.Writer, "✓ %s\n", message)
-	return nil
+	return f.outputJSON(Response{
+		Success:   true,
+		Operation: operation,
+		Data:      data,
+		Message:   message,
+	})
 }
 
 // Error outputs an error response
 func (f *Formatter) Error(code, message string, details interface{}) error {
-	if f.JSONMode {
-		return f.outputJSON(Response{
-			Success: false,
-			Error: &ErrorInfo{
-				Code:    code,
-				Message: message,
-				Details: details,
-			},
-		})
+	if f.HumanMode {
+		// Human-friendly error
+		fmt.Fprintf(os.Stderr, "Error: %s\n", message)
+		return nil
 	}
-	// Human-friendly error
-	fmt.Fprintf(os.Stderr, "Error: %s\n", message)
-	return nil
+	return f.outputJSON(Response{
+		Success: false,
+		Error: &ErrorInfo{
+			Code:    code,
+			Message: message,
+			Details: details,
+		},
+	})
 }
 
-// outputJSON writes JSON response
+// outputJSON writes compact single-line JSON response
 func (f *Formatter) outputJSON(resp Response) error {
-	encoder := json.NewEncoder(f.Writer)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(resp)
+	bytes, err := json.Marshal(resp)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(f.Writer, string(bytes))
+	return err
 }

@@ -184,7 +184,6 @@ func getConnection(profileName string) (database.Connection, error) {
 		Username: creds.Username,
 		Password: creds.Password,
 		SSLMode:  profileConfig.SSLMode,
-		PoolSize: profileConfig.PoolSize,
 		ReadOnly: profileConfig.ReadOnly,
 	}
 

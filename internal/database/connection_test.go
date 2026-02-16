@@ -49,7 +49,6 @@ func TestConnectionConfig(t *testing.T) {
 		Username: "testuser",
 		Password: "secret",
 		SSLMode:  "require",
-		PoolSize: 10,
 	}
 
 	if config.Host != "localhost" {
@@ -75,10 +74,6 @@ func TestConnectionConfig(t *testing.T) {
 	if config.SSLMode != "require" {
 		t.Errorf("Expected SSLMode 'require', got '%s'", config.SSLMode)
 	}
-
-	if config.PoolSize != 10 {
-		t.Errorf("Expected pool size 10, got %d", config.PoolSize)
-	}
 }
 
 // TestBuildConnString_ReadOnly tests that the connection string includes
@@ -91,7 +86,6 @@ func TestBuildConnString_ReadOnly(t *testing.T) {
 		Username: "user",
 		Password: "pass",
 		SSLMode:  "disable",
-		PoolSize: 5,
 	}
 
 	t.Run("read-only appends param", func(t *testing.T) {
@@ -401,7 +395,6 @@ func TestReadOnlyConnection_Integration(t *testing.T) {
 		Username: "postgres",
 		Password: "postgres",
 		SSLMode:  "disable",
-		PoolSize: 1,
 		ReadOnly: true,
 	}
 

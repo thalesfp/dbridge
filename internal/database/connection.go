@@ -112,7 +112,6 @@ type ConnectionConfig struct {
 	Username string
 	Password string
 	SSLMode  string
-	PoolSize int
 	ReadOnly bool
 }
 
@@ -125,14 +124,13 @@ type PgxConnection struct {
 // buildConnString builds a PostgreSQL connection string from the config.
 func buildConnString(config *ConnectionConfig) string {
 	connString := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s&pool_max_conns=%d",
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		config.Username,
 		config.Password,
 		config.Host,
 		config.Port,
 		config.Database,
 		config.SSLMode,
-		config.PoolSize,
 	)
 
 	if config.ReadOnly {

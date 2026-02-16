@@ -10,45 +10,44 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Settings Settings            `mapstructure:"settings"`
-	Profiles map[string]*Profile `mapstructure:"profiles"`
+	Settings Settings            `mapstructure:"settings" yaml:"settings"`
+	Profiles map[string]*Profile `mapstructure:"profiles" yaml:"profiles"`
 }
 
 // Settings holds global application settings
 type Settings struct {
-	DefaultProfile string       `mapstructure:"default_profile"`
-	Output         OutputConfig `mapstructure:"output"`
-	Safety         SafetyConfig `mapstructure:"safety"`
-	AuditLog       bool         `mapstructure:"audit_log"`
-	AuditLogPath   string       `mapstructure:"audit_log_path"`
+	DefaultProfile string       `mapstructure:"default_profile" yaml:"default_profile"`
+	Output         OutputConfig `mapstructure:"output" yaml:"output"`
+	Safety         SafetyConfig `mapstructure:"safety" yaml:"safety"`
+	AuditLog       bool         `mapstructure:"audit_log" yaml:"audit_log"`
+	AuditLogPath   string       `mapstructure:"audit_log_path" yaml:"audit_log_path"`
 }
 
 // OutputConfig holds output format settings
 type OutputConfig struct {
-	Default         string `mapstructure:"default"`          // auto, compact, full, table, csv
-	AutoDetectTTY   bool   `mapstructure:"auto_detect_tty"`  // Auto-switch based on TTY
-	IncludeTypes    bool   `mapstructure:"include_types"`    // Include column types
-	IncludeTiming   bool   `mapstructure:"include_timing"`   // Include execution time
-	IncludeWarnings bool   `mapstructure:"include_warnings"` // Include warnings
-	SmartSimplify   bool   `mapstructure:"smart_simplify"`   // Smart format for single col/row
+	Default         string `mapstructure:"default" yaml:"default"`                   // auto, compact, full, table, csv
+	AutoDetectTTY   bool   `mapstructure:"auto_detect_tty" yaml:"auto_detect_tty"`   // Auto-switch based on TTY
+	IncludeTypes    bool   `mapstructure:"include_types" yaml:"include_types"`        // Include column types
+	IncludeTiming   bool   `mapstructure:"include_timing" yaml:"include_timing"`      // Include execution time
+	IncludeWarnings bool   `mapstructure:"include_warnings" yaml:"include_warnings"`  // Include warnings
+	SmartSimplify   bool   `mapstructure:"smart_simplify" yaml:"smart_simplify"`      // Smart format for single col/row
 }
 
 // SafetyConfig holds safety settings
 type SafetyConfig struct {
-	RequireConfirmation        []string `mapstructure:"require_confirmation"`          // Operations requiring confirmation
-	MaxRowsWithoutConfirmation int      `mapstructure:"max_rows_without_confirmation"` // Threshold for confirmations
+	RequireConfirmation        []string `mapstructure:"require_confirmation" yaml:"require_confirmation"`                   // Operations requiring confirmation
+	MaxRowsWithoutConfirmation int      `mapstructure:"max_rows_without_confirmation" yaml:"max_rows_without_confirmation"` // Threshold for confirmations
 }
 
 // Profile represents a database connection profile
 type Profile struct {
-	Name     string `mapstructure:"name"`
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Database string `mapstructure:"database"`
-	Username string `mapstructure:"username"` // Optional: can be stored in keychain only
-	SSLMode  string `mapstructure:"ssl_mode"`
-	PoolSize int    `mapstructure:"pool_size"`
-	ReadOnly bool   `mapstructure:"readonly"` // Always true for now (v1.0 is read-only)
+	Name     string `mapstructure:"name" yaml:"name"`
+	Host     string `mapstructure:"host" yaml:"host"`
+	Port     int    `mapstructure:"port" yaml:"port"`
+	Database string `mapstructure:"database" yaml:"database"`
+	Username string `mapstructure:"username" yaml:"username"` // Optional: can be stored in keychain only
+	SSLMode  string `mapstructure:"ssl_mode" yaml:"ssl_mode"`
+	ReadOnly bool   `mapstructure:"readonly" yaml:"readonly"` // Always true for now (v1.0 is read-only)
 }
 
 // DefaultConfig returns the default configuration
@@ -163,9 +162,6 @@ func (c *Config) GetProfile(name string) (*Profile, error) {
 	// Apply defaults if not set
 	if profile.Port == 0 {
 		profile.Port = 5432
-	}
-	if profile.PoolSize == 0 {
-		profile.PoolSize = 5
 	}
 	if profile.SSLMode == "" {
 		profile.SSLMode = "require"

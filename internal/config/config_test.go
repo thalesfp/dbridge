@@ -49,7 +49,6 @@ func TestAddProfile(t *testing.T) {
 		Database: "testdb",
 		Username: "testuser",
 		SSLMode:  "require",
-		PoolSize: 10,
 		ReadOnly: false,
 	}
 
@@ -246,11 +245,6 @@ func TestProfileDefaults(t *testing.T) {
 	// Default port should be 0 (will be set to 5432 by defaults or during connection)
 	if profile.Port != 0 {
 		t.Errorf("Expected default port 0, got %d", profile.Port)
-	}
-
-	// Default pool size should be 0 (will use default)
-	if profile.PoolSize != 0 {
-		t.Errorf("Expected default pool size 0, got %d", profile.PoolSize)
 	}
 
 	// Default readonly should be false
