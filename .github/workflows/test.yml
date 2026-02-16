@@ -24,7 +24,7 @@ jobs:
       run: go mod download
 
     - name: Run unit tests
-      run: go test -v -short -race -coverprofile=coverage.out -covermode=atomic ./...
+      run: CGO_ENABLED=1 go test -v -short -race -coverprofile=coverage.out -covermode=atomic ./...
 
     - name: Upload coverage
       uses: codecov/codecov-action@v4
@@ -57,7 +57,7 @@ jobs:
       run: |
         TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5440/postgres?sslmode=disable" \
         TEST_MYSQL_URL="dbridge:dbridge@tcp(localhost:3340)/dbridge_test" \
-        go test -v -race -run Integration ./...
+        CGO_ENABLED=1 go test -v -race -run Integration ./...
 
     - name: Stop test containers
       if: always()
