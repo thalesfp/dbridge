@@ -111,8 +111,9 @@ dbridge config clone production staging
 ### Edit Profile
 
 ```bash
-# Edit existing profile
-dbridge config edit production
+# Edit via the manage menu
+dbridge --human config manage
+# Select a profile → "Edit profile"
 
 # Will open TUI form with current values
 # Can modify any field including profile name

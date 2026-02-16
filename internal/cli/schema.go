@@ -164,6 +164,10 @@ func getConnection(profileName string) (database.Connection, error) {
 		return nil, err
 	}
 
+	if profileConfig.Disabled {
+		return nil, fmt.Errorf("profile '%s' is disabled (enable it with: dbridge --human config manage)", profileName)
+	}
+
 	// Load credentials
 	credStore, err := credentials.NewStore("dbridge")
 	if err != nil {

@@ -40,6 +40,10 @@ Examples:
 				return err
 			}
 
+			if profileConfig.Disabled {
+				return fmt.Errorf("profile '%s' is disabled (enable it with: dbridge --human config manage)", profileName)
+			}
+
 			// Load credentials
 			credStore, err := credentials.NewStore("dbridge")
 			if err != nil {

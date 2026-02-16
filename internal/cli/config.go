@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"sort"
 	"syscall"
 
 	"github.com/charmbracelet/huh"
@@ -29,7 +30,7 @@ func NewConfigCmd() *cobra.Command {
 	cmd.AddCommand(newConfigShowCmd())
 	cmd.AddCommand(newConfigRemoveCmd())
 	cmd.AddCommand(newConfigCloneCmd())
-	cmd.AddCommand(newConfigEditCmd())
+	cmd.AddCommand(newConfigManageCmd())
 
 	return cmd
 }
@@ -409,6 +410,7 @@ func newConfigListCmd() *cobra.Command {
 						"username":   profile.Username,
 						"ssl_mode":   profile.SSLMode,
 						"read_only":  profile.ReadOnly,
+						"disabled":   profile.Disabled,
 					})
 				}
 
@@ -420,11 +422,14 @@ func newConfigListCmd() *cobra.Command {
 
 			fmt.Println("Profiles:")
 			for name, profile := range cfg.Profiles {
-				readOnlyMarker := ""
+				markers := ""
 				if profile.ReadOnly {
-					readOnlyMarker = " [read-only]"
+					markers += " [read-only]"
 				} else {
-					readOnlyMarker = " [read-write]"
+					markers += " [read-write]"
+				}
+				if profile.Disabled {
+					markers += " [DISABLED]"
 				}
 
 				fmt.Printf("  %s - %s:%d/%s%s\n",
@@ -432,7 +437,7 @@ func newConfigListCmd() *cobra.Command {
 					profile.Host,
 					profile.Port,
 					profile.Database,
-					readOnlyMarker,
+					markers,
 				)
 			}
 
@@ -476,6 +481,7 @@ func newConfigShowCmd() *cobra.Command {
 						"username":   profile.Username,
 						"ssl_mode":   profile.SSLMode,
 						"read_only":  profile.ReadOnly,
+						"disabled":   profile.Disabled,
 					},
 					"has_credentials": true,
 				}
@@ -672,141 +678,292 @@ Examples:
 	}
 }
 
-// newConfigEditCmd creates the 'config edit' command
-func newConfigEditCmd() *cobra.Command {
+// runEditFlow runs the interactive edit flow for a profile
+func runEditFlow(cfg *config.Config, profileName string) error {
+	// Get existing profile
+	existingProfile, err := cfg.GetProfile(profileName)
+	if err != nil {
+		return fmt.Errorf("profile not found: %w", err)
+	}
+
+	// Load existing credentials (may not exist for passwordless profiles)
+	credStore, err := credentials.NewStore("dbridge")
+	if err != nil {
+		return fmt.Errorf("failed to open credential store: %w", err)
+	}
+
+	ctx := context.Background()
+	existingCreds, err := credStore.Load(ctx, profileName)
+
+	// Default to empty password if credentials don't exist (passwordless profile)
+	existingPassword := ""
+	if err == nil {
+		existingPassword = existingCreds.Password
+	}
+
+	// Launch form pre-filled with existing data
+	profileData, err := form.NewProfileFormWithDefaults(
+		existingProfile.Name,
+		existingProfile.Database,
+		existingProfile.Host,
+		existingProfile.Port,
+		existingProfile.Username,
+		existingProfile.SSLMode,
+		existingPassword, // May be empty for passwordless profiles
+	)
+	if err != nil {
+		return fmt.Errorf("edit cancelled or error: %w", err)
+	}
+
+	// Check if profile name changed
+	nameChanged := profileData.Name != profileName
+
+	if nameChanged {
+		// Remove old profile and credentials
+		cfg.RemoveProfile(profileName)
+		credStore.Delete(ctx, profileName)
+
+		fmt.Printf("ℹ️  Profile renamed from '%s' to '%s'\n", profileName, profileData.Name)
+	}
+
+	// Update profile
+	updatedProfile := &config.Profile{
+		Name:     profileData.Name,
+		Host:     profileData.Host,
+		Port:     profileData.Port,
+		Database: profileData.Database,
+		Username: profileData.Username,
+		SSLMode:  profileData.SSLMode,
+		ReadOnly: true,
+		Disabled: existingProfile.Disabled,
+	}
+
+	// Save updated credentials (only if password provided)
+	if profileData.Password != "" {
+		if err := credStore.Save(ctx, profileData.Name, credentials.Credentials{
+			Username: profileData.Username,
+			Password: profileData.Password,
+		}); err != nil {
+			return fmt.Errorf("failed to save credentials: %w", err)
+		}
+	} else {
+		// If password is now empty, delete any existing credentials
+		credStore.Delete(ctx, profileData.Name)
+	}
+
+	// Add/update profile in config
+	cfg.AddProfile(updatedProfile)
+
+	// Save config
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Printf("\n✓ Profile '%s' updated successfully\n", profileData.Name)
+	if profileData.Password != "" {
+		fmt.Printf("✓ Credentials updated in %s\n", credStore.Type())
+	} else {
+		fmt.Printf("✓ Using passwordless authentication\n")
+	}
+
+	// Prompt to test connection
+	var runTest bool
+	huh.NewConfirm().
+		Title("Test connection?").
+		Value(&runTest).
+		WithTheme(form.CustomTheme()).
+		Run()
+
+	if runTest {
+		result := runConnectionTest(ctx, profileData)
+		printConnectionTestResult(result)
+	}
+
+	return nil
+}
+
+// newConfigManageCmd creates the 'config manage' command
+func newConfigManageCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "edit <profile-name>",
-		Short: "Edit an existing connection profile",
-		Long: `Edit an existing database connection profile.
+		Use:   "manage",
+		Short: "Interactive profile management menu",
+		Long: `Interactively manage database connection profiles.
 
-Opens an interactive form pre-filled with the current profile settings.
-You can modify any field and save the changes.
-
-Note: Changing the profile name will create a new profile and remove the old one.
+Provides a menu to enable/disable and delete profiles.
+Requires --human flag for interactive mode.
 
 Examples:
-  dbridge config edit production
-  dbridge config edit local
+  dbridge --human config manage
 `,
-		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			formatter := getFormatter(cmd)
-			profileName := args[0]
 
-			// Default (JSON) mode not supported for edit (requires interactive TUI)
 			if !formatter.HumanMode {
 				return formatError(cmd, "invalid_mode",
 					"Interactive mode requires --human flag",
 					nil)
 			}
 
-			// Load config
-			cfg, err := config.Load()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			// Get existing profile
-			existingProfile, err := cfg.GetProfile(profileName)
-			if err != nil {
-				return fmt.Errorf("profile not found: %w", err)
-			}
-
-			// Load existing credentials (may not exist for passwordless profiles)
-			credStore, err := credentials.NewStore("dbridge")
-			if err != nil {
-				return fmt.Errorf("failed to open credential store: %w", err)
-			}
-
-			ctx := context.Background()
-			existingCreds, err := credStore.Load(ctx, profileName)
-
-			// Default to empty password if credentials don't exist (passwordless profile)
-			existingPassword := ""
-			if err == nil {
-				existingPassword = existingCreds.Password
-			}
-
-			// Launch form pre-filled with existing data
-			profileData, err := form.NewProfileFormWithDefaults(
-				existingProfile.Name,
-				existingProfile.Database,
-				existingProfile.Host,
-				existingProfile.Port,
-				existingProfile.Username,
-				existingProfile.SSLMode,
-				existingPassword, // May be empty for passwordless profiles
-			)
-			if err != nil {
-				return fmt.Errorf("edit cancelled or error: %w", err)
-			}
-
-			// Check if profile name changed
-			nameChanged := profileData.Name != profileName
-
-			if nameChanged {
-				// Remove old profile and credentials
-				cfg.RemoveProfile(profileName)
-				credStore.Delete(ctx, profileName)
-
-				fmt.Printf("ℹ️  Profile renamed from '%s' to '%s'\n", profileName, profileData.Name)
-			}
-
-			// Update profile
-			updatedProfile := &config.Profile{
-				Name:     profileData.Name,
-				Host:     profileData.Host,
-				Port:     profileData.Port,
-				Database: profileData.Database,
-				Username: profileData.Username,
-				SSLMode:  profileData.SSLMode,
-				ReadOnly: true,
-			}
-
-			// Save updated credentials (only if password provided)
-			if profileData.Password != "" {
-				if err := credStore.Save(ctx, profileData.Name, credentials.Credentials{
-					Username: profileData.Username,
-					Password: profileData.Password,
-				}); err != nil {
-					return fmt.Errorf("failed to save credentials: %w", err)
-				}
-			} else {
-				// If password is now empty, delete any existing credentials
-				credStore.Delete(ctx, profileData.Name)
-			}
-
-			// Add/update profile in config
-			cfg.AddProfile(updatedProfile)
-
-			// Save config
-			if err := cfg.Save(); err != nil {
-				return fmt.Errorf("failed to save config: %w", err)
-			}
-
-			fmt.Printf("\n✓ Profile '%s' updated successfully\n", profileData.Name)
-			if profileData.Password != "" {
-				fmt.Printf("✓ Credentials updated in %s\n", credStore.Type())
-			} else {
-				fmt.Printf("✓ Using passwordless authentication\n")
-			}
-
-			// Prompt to test connection
-			var runTest bool
-			huh.NewConfirm().
-				Title("Test connection?").
-				Value(&runTest).
-				WithTheme(form.CustomTheme()).
-				Run()
-
-			if runTest {
-				result := runConnectionTest(ctx, profileData)
-				printConnectionTestResult(result)
-			}
-
-			return nil
+			return runManageMenu(cmd)
 		},
 	}
+}
+
+// runManageMenu is the main loop for the interactive manage menu
+func runManageMenu(cmd *cobra.Command) error {
+	for {
+		// Reload config each iteration to reflect changes
+		cfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		if len(cfg.Profiles) == 0 {
+			fmt.Println("No profiles configured.")
+			fmt.Println("\nAdd a profile with: dbridge config add <name>")
+			return nil
+		}
+
+		// Step 1: Select a profile
+		profileOptions := buildProfileOptions(cfg)
+		profileOptions = append(profileOptions, huh.NewOption("← Exit", "__exit"))
+
+		var selectedProfile string
+		err = huh.NewSelect[string]().
+			Title("Select a profile to manage").
+			Options(profileOptions...).
+			Value(&selectedProfile).
+			WithTheme(form.CustomTheme()).
+			Run()
+		if err != nil {
+			return nil // User cancelled
+		}
+
+		if selectedProfile == "__exit" {
+			return nil // Exit
+		}
+
+		// Step 2: Select an action
+		profile, err := cfg.GetProfile(selectedProfile)
+		if err != nil {
+			return fmt.Errorf("profile not found: %w", err)
+		}
+
+		action, err := selectProfileAction(profile)
+		if err != nil || action == "back" {
+			continue // Back to profile list
+		}
+
+		// Step 3: Execute action
+		switch action {
+		case "edit":
+			if err := runEditFlow(cfg, selectedProfile); err != nil {
+				return err
+			}
+		case "toggle":
+			if err := toggleProfile(cfg, selectedProfile); err != nil {
+				return err
+			}
+			if profile.Disabled {
+				fmt.Printf("✓ Profile '%s' disabled\n\n", selectedProfile)
+			} else {
+				fmt.Printf("✓ Profile '%s' enabled\n\n", selectedProfile)
+			}
+		case "delete":
+			ctx := context.Background()
+			deleted, err := deleteProfileConfirm(ctx, cfg, selectedProfile)
+			if err != nil {
+				return err
+			}
+			if deleted {
+				fmt.Printf("✓ Profile '%s' deleted\n\n", selectedProfile)
+			}
+		}
+	}
+}
+
+// buildProfileOptions builds huh select options for all profiles
+func buildProfileOptions(cfg *config.Config) []huh.Option[string] {
+	names := make([]string, 0, len(cfg.Profiles))
+	for name := range cfg.Profiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	options := make([]huh.Option[string], 0, len(names))
+	for _, name := range names {
+		profile := cfg.Profiles[name]
+		icon := "✓"
+		status := "enabled"
+		if profile.Disabled {
+			icon = "✗"
+			status = "disabled"
+		}
+		label := fmt.Sprintf("%s %s - %s:%d/%s (%s)",
+			icon, name, profile.Host, profile.Port, profile.Database, status)
+		options = append(options, huh.NewOption(label, name))
+	}
+	return options
+}
+
+// selectProfileAction shows the action menu for a profile
+func selectProfileAction(profile *config.Profile) (string, error) {
+	toggleLabel := "Disable profile"
+	if profile.Disabled {
+		toggleLabel = "Enable profile"
+	}
+
+	var action string
+	err := huh.NewSelect[string]().
+		Title(fmt.Sprintf("Action for '%s'", profile.Name)).
+		Options(
+			huh.NewOption("← Back to profile list", "back"),
+			huh.NewOption("Edit profile", "edit"),
+			huh.NewOption(toggleLabel, "toggle"),
+			huh.NewOption("Delete profile", "delete"),
+		).
+		Value(&action).
+		WithTheme(form.CustomTheme()).
+		Run()
+	if err != nil {
+		return "back", err
+	}
+	return action, nil
+}
+
+// toggleProfile flips the Disabled state and saves
+func toggleProfile(cfg *config.Config, name string) error {
+	profile := cfg.Profiles[name]
+	profile.Disabled = !profile.Disabled
+	return cfg.Save()
+}
+
+// deleteProfileConfirm confirms and deletes a profile and its credentials
+func deleteProfileConfirm(ctx context.Context, cfg *config.Config, name string) (bool, error) {
+	var confirm bool
+	err := huh.NewConfirm().
+		Title(fmt.Sprintf("Delete profile '%s'? This cannot be undone.", name)).
+		Affirmative("Delete").
+		Negative("Cancel").
+		Value(&confirm).
+		WithTheme(form.CustomTheme()).
+		Run()
+	if err != nil || !confirm {
+		return false, nil
+	}
+
+	// Delete credentials
+	credStore, err := credentials.NewStore("dbridge")
+	if err == nil {
+		credStore.Delete(ctx, name)
+	}
+
+	// Remove profile
+	if err := cfg.RemoveProfile(name); err != nil {
+		return false, fmt.Errorf("failed to remove profile: %w", err)
+	}
+
+	return true, cfg.Save()
 }
 
 // connectionTestResult holds the outcome of a connection test

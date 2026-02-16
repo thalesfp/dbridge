@@ -47,6 +47,7 @@ type Profile struct {
 	Username string `mapstructure:"username" yaml:"username"` // Optional: can be stored in keychain only
 	SSLMode  string `mapstructure:"ssl_mode" yaml:"ssl_mode"`
 	ReadOnly bool   `mapstructure:"readonly" yaml:"readonly"` // Always true for now (v1.0 is read-only)
+	Disabled bool   `mapstructure:"disabled" yaml:"disabled"`
 }
 
 // DefaultConfig returns the default configuration

@@ -207,8 +207,9 @@ dbridge config add production \
 ### Add Password to Passwordless Profile
 
 ```bash
-# Edit the profile
-dbridge config edit localdev
+# Edit the profile via the manage menu
+dbridge --human config manage
+# Select 'localdev' → "Edit profile"
 
 # In the form, enter a password
 # The profile will now use password authentication
@@ -217,8 +218,9 @@ dbridge config edit localdev
 ### Remove Password from Password-Protected Profile
 
 ```bash
-# Edit the profile
-dbridge config edit mydb
+# Edit the profile via the manage menu
+dbridge --human config manage
+# Select 'mydb' → "Edit profile"
 
 # In the form, delete the password (leave field empty)
 # The profile will now use passwordless authentication
@@ -253,7 +255,8 @@ Your PostgreSQL server expects a password. Either:
 1. Configure PostgreSQL for passwordless auth (see above), or
 2. Edit the profile and add a password:
    ```bash
-   dbridge config edit myprofile
+   dbridge --human config manage
+   # Select 'myprofile' → "Edit profile"
    ```
 
 ## Security Considerations
@@ -298,6 +301,6 @@ dbridge config list
 # Clone a passwordless profile
 dbridge config clone localdev staging
 
-# Edit authentication settings
-dbridge config edit myprofile
+# Edit authentication settings via manage menu
+dbridge --human config manage
 ```

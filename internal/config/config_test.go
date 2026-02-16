@@ -232,4 +232,102 @@ func TestProfileDefaults(t *testing.T) {
 	if profile.ReadOnly {
 		t.Error("Expected default ReadOnly to be false")
 	}
+
+	// Default disabled should be false (zero value)
+	if profile.Disabled {
+		t.Error("Expected default Disabled to be false")
+	}
+}
+
+// TestProfileDisabledField tests the Disabled field behavior
+func TestProfileDisabledField(t *testing.T) {
+	cfg := DefaultConfig()
+
+	// Add an enabled profile (default)
+	cfg.AddProfile(&Profile{
+		Name:     "enabled-db",
+		Host:     "localhost",
+		Database: "testdb",
+		Username: "user",
+	})
+
+	// Add a disabled profile
+	cfg.AddProfile(&Profile{
+		Name:     "disabled-db",
+		Host:     "localhost",
+		Database: "testdb",
+		Username: "user",
+		Disabled: true,
+	})
+
+	// Verify enabled profile
+	enabledProfile, err := cfg.GetProfile("enabled-db")
+	if err != nil {
+		t.Fatalf("Failed to get enabled profile: %v", err)
+	}
+	if enabledProfile.Disabled {
+		t.Error("Expected enabled profile to have Disabled=false")
+	}
+
+	// Verify disabled profile
+	disabledProfile, err := cfg.GetProfile("disabled-db")
+	if err != nil {
+		t.Fatalf("Failed to get disabled profile: %v", err)
+	}
+	if !disabledProfile.Disabled {
+		t.Error("Expected disabled profile to have Disabled=true")
+	}
+}
+
+// TestToggleProfileDisabled tests toggling the Disabled state
+func TestToggleProfileDisabled(t *testing.T) {
+	cfg := DefaultConfig()
+
+	cfg.AddProfile(&Profile{
+		Name:     "toggle-test",
+		Host:     "localhost",
+		Database: "testdb",
+		Username: "user",
+	})
+
+	profile := cfg.Profiles["toggle-test"]
+
+	// Initially not disabled
+	if profile.Disabled {
+		t.Error("Expected profile to start as not disabled")
+	}
+
+	// Disable it
+	profile.Disabled = true
+	if !profile.Disabled {
+		t.Error("Expected profile to be disabled after toggle")
+	}
+
+	// Re-enable it
+	profile.Disabled = false
+	if profile.Disabled {
+		t.Error("Expected profile to be enabled after second toggle")
+	}
+}
+
+// TestGetProfileStillWorksWhenDisabled tests that GetProfile returns disabled profiles
+func TestGetProfileStillWorksWhenDisabled(t *testing.T) {
+	cfg := DefaultConfig()
+
+	cfg.AddProfile(&Profile{
+		Name:     "disabled-profile",
+		Host:     "localhost",
+		Database: "testdb",
+		Username: "user",
+		Disabled: true,
+	})
+
+	// GetProfile should still return the profile (disabled check is at connection points)
+	profile, err := cfg.GetProfile("disabled-profile")
+	if err != nil {
+		t.Fatalf("GetProfile should return disabled profiles, got error: %v", err)
+	}
+	if !profile.Disabled {
+		t.Error("Expected profile to be disabled")
+	}
 }
