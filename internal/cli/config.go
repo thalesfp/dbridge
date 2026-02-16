@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"syscall"
 
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli/form"
 	"github.com/thalesfp/dbridge/internal/cli/output"
 	"github.com/thalesfp/dbridge/internal/config"
 	"github.com/thalesfp/dbridge/internal/credentials"
+	"github.com/thalesfp/dbridge/internal/database"
 	"golang.org/x/term"
 )
 
@@ -35,14 +37,14 @@ func NewConfigCmd() *cobra.Command {
 // newConfigAddCmd creates the 'config add' command
 func newConfigAddCmd() *cobra.Command {
 	var (
-		host     string
-		port     int
-		database string
-		username string
-		password string
-		sslMode  string
-		poolSize int
-		readOnly bool
+		host           string
+		port           int
+		database       string
+		username       string
+		password       string
+		sslMode        string
+		readOnly       bool
+		testConnection bool
 	)
 
 	cmd := &cobra.Command{
@@ -80,10 +82,10 @@ Examples:
 			// Check if any flags were explicitly set (flag-based mode)
 			flagMode := cmd.Flags().Changed("database") || cmd.Flags().Changed("username")
 
-			// JSON mode requires flag mode (no interactive TUI)
-			if formatter.JSONMode && !flagMode {
+			// Default (JSON) mode requires flag mode (no interactive TUI)
+			if !formatter.HumanMode && !flagMode {
 				return formatError(cmd, "invalid_mode",
-					"--json mode requires using flags (--database, --username, etc.) instead of interactive form",
+					"Interactive mode requires --human flag",
 					nil)
 			}
 
@@ -107,6 +109,11 @@ Examples:
 
 				// Get password if not provided via flag
 				if !cmd.Flags().Changed("password") {
+					if !formatter.HumanMode {
+						return formatError(cmd, "missing_password",
+							"--password flag is required in non-interactive mode (use --password=\"\" for passwordless auth)",
+							nil)
+					}
 					fmt.Printf("Enter password for %s@%s (or press Enter for passwordless auth): ", username, host)
 					passwordBytes, err := readPassword()
 					if err != nil {
@@ -135,9 +142,6 @@ Examples:
 				if port == 0 {
 					port = 5432
 				}
-				if poolSize == 0 {
-					poolSize = 5
-				}
 				if sslMode == "" {
 					sslMode = "prefer"
 				}
@@ -149,7 +153,6 @@ Examples:
 					Database: database,
 					Username: username,
 					SSLMode:  sslMode,
-					PoolSize: poolSize,
 					Password: password,
 				}
 			} else {
@@ -179,7 +182,6 @@ Examples:
 				Database: profileData.Database,
 				Username: profileData.Username,
 				SSLMode:  profileData.SSLMode,
-				PoolSize: profileData.PoolSize,
 				ReadOnly: true, // v1.0 is read-only only
 			}
 
@@ -210,8 +212,34 @@ Examples:
 				return fmt.Errorf("failed to save config: %w", err)
 			}
 
+			// Test connection if requested (flag-based or TUI prompt)
+			var connTestResult *connectionTestResult
+			if !formatter.HumanMode {
+				// JSON mode: use the flag
+				if testConnection {
+					connTestResult = runConnectionTest(ctx, profileData)
+				}
+			} else if flagMode {
+				// Human flag mode: use the flag
+				if testConnection {
+					connTestResult = runConnectionTest(ctx, profileData)
+				}
+			} else {
+				// Interactive TUI mode: prompt the user
+				var runTest bool
+				huh.NewConfirm().
+					Title("Test connection?").
+					Value(&runTest).
+					WithTheme(form.CustomTheme()).
+					Run()
+
+				if runTest {
+					connTestResult = runConnectionTest(ctx, profileData)
+				}
+			}
+
 			// Output success message
-			if formatter.JSONMode {
+			if !formatter.HumanMode {
 				// JSON output
 				credStore := "none"
 				if profileData.Password != "" {
@@ -229,11 +257,14 @@ Examples:
 						"database":  profileData.Database,
 						"username":  profileData.Username,
 						"ssl_mode":  profileData.SSLMode,
-						"pool_size": profileData.PoolSize,
 						"read_only": true,
 					},
 					"credentials_stored": profileData.Password != "",
 					"credential_store":   credStore,
+				}
+
+				if connTestResult != nil {
+					data["connection_test"] = connTestResult.toMap()
 				}
 
 				msg := fmt.Sprintf("Profile '%s' added successfully", profileData.Name)
@@ -245,6 +276,9 @@ Examples:
 					fmt.Printf("✓ Credentials stored in %s\n", credStore.Type())
 				} else {
 					fmt.Printf("✓ Using passwordless authentication\n")
+				}
+				if connTestResult != nil {
+					printConnectionTestResult(connTestResult)
 				}
 			} else {
 				// Enhanced success message for interactive mode
@@ -276,6 +310,9 @@ Examples:
 				)
 
 				fmt.Println("\n" + boxStyle.Render(message))
+				if connTestResult != nil {
+					printConnectionTestResult(connTestResult)
+				}
 			}
 
 			return nil
@@ -289,8 +326,8 @@ Examples:
 	cmd.Flags().StringVar(&username, "username", "", "Database username (required for flag mode)")
 	cmd.Flags().StringVar(&password, "password", "", "Database password (optional, will prompt if not provided)")
 	cmd.Flags().StringVar(&sslMode, "ssl-mode", "prefer", "SSL mode (disable, require, prefer)")
-	cmd.Flags().IntVar(&poolSize, "pool-size", 5, "Connection pool size")
 	cmd.Flags().BoolVar(&readOnly, "readonly", true, "Read-only mode")
+	cmd.Flags().BoolVar(&testConnection, "test-connection", false, "Test the database connection after adding the profile")
 
 	return cmd
 }
@@ -300,20 +337,28 @@ func readPassword() ([]byte, error) {
 	return term.ReadPassword(int(syscall.Stdin))
 }
 
-// getFormatter creates a formatter instance based on the JSON output flag
+// getFormatter creates a formatter instance based on the human output flag
 func getFormatter(cmd *cobra.Command) *output.Formatter {
-	jsonMode := false
-	if val := cmd.Context().Value("json_output"); val != nil {
-		jsonMode = val.(bool)
+	humanMode := false
+	if val := cmd.Context().Value("human_output"); val != nil {
+		humanMode = val.(bool)
 	}
-	return output.NewFormatter(jsonMode)
+	return output.NewFormatter(humanMode)
 }
 
-// formatError outputs a structured error in JSON mode
+// HandledError is an error that has already been output (e.g. as JSON)
+type HandledError struct {
+	Message string
+}
+
+func (e *HandledError) Error() string { return e.Message }
+
+// formatError outputs a structured error and returns it
 func formatError(cmd *cobra.Command, code, message string, details interface{}) error {
 	formatter := getFormatter(cmd)
-	if formatter.JSONMode {
+	if !formatter.HumanMode {
 		formatter.Error(code, message, details)
+		return &HandledError{Message: message}
 	}
 	return fmt.Errorf("%s", message)
 }
@@ -341,7 +386,7 @@ func newConfigListCmd() *cobra.Command {
 			}
 
 			if len(cfg.Profiles) == 0 {
-				if formatter.JSONMode {
+				if !formatter.HumanMode {
 					return formatter.Success("config_list", map[string]interface{}{
 						"profiles":        []interface{}{},
 						"default_profile": "",
@@ -354,7 +399,7 @@ func newConfigListCmd() *cobra.Command {
 				return nil
 			}
 
-			if formatter.JSONMode {
+			if !formatter.HumanMode {
 				profiles := make([]map[string]interface{}, 0, len(cfg.Profiles))
 				for name, profile := range cfg.Profiles {
 					profiles = append(profiles, map[string]interface{}{
@@ -364,7 +409,6 @@ func newConfigListCmd() *cobra.Command {
 						"database":   profile.Database,
 						"username":   profile.Username,
 						"ssl_mode":   profile.SSLMode,
-						"pool_size":  profile.PoolSize,
 						"read_only":  profile.ReadOnly,
 						"is_default": name == cfg.Settings.DefaultProfile,
 					})
@@ -431,7 +475,7 @@ func newConfigShowCmd() *cobra.Command {
 					})
 			}
 
-			if formatter.JSONMode {
+			if !formatter.HumanMode {
 				data := map[string]interface{}{
 					"profile": map[string]interface{}{
 						"name":       profile.Name,
@@ -440,7 +484,6 @@ func newConfigShowCmd() *cobra.Command {
 						"database":   profile.Database,
 						"username":   profile.Username,
 						"ssl_mode":   profile.SSLMode,
-						"pool_size":  profile.PoolSize,
 						"read_only":  profile.ReadOnly,
 						"is_default": profile.Name == cfg.Settings.DefaultProfile,
 					},
@@ -457,7 +500,6 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Printf("Database: %s\n", profile.Database)
 			fmt.Printf("Username: %s\n", profile.Username)
 			fmt.Printf("SSL Mode: %s\n", profile.SSLMode)
-			fmt.Printf("Pool Size: %d\n", profile.PoolSize)
 			fmt.Printf("Read-only: %t\n", profile.ReadOnly)
 			fmt.Printf("Credentials: stored in keychain\n")
 
@@ -489,7 +531,7 @@ func newConfigRemoveCmd() *cobra.Command {
 
 			ctx := context.Background()
 			credDeleteErr := credStore.Delete(ctx, profileName)
-			if credDeleteErr != nil && !formatter.JSONMode {
+			if credDeleteErr != nil && formatter.HumanMode {
 				fmt.Printf("Warning: failed to delete credentials: %v\n", credDeleteErr)
 			}
 
@@ -508,7 +550,7 @@ func newConfigRemoveCmd() *cobra.Command {
 				return fmt.Errorf("failed to save config: %w", err)
 			}
 
-			if formatter.JSONMode {
+			if !formatter.HumanMode {
 				data := map[string]interface{}{
 					"profile_name":        profileName,
 					"credentials_deleted": credDeleteErr == nil,
@@ -545,10 +587,10 @@ Examples:
 			formatter := getFormatter(cmd)
 			sourceProfileName := args[0]
 
-			// JSON mode not supported for clone (requires interactive TUI)
-			if formatter.JSONMode {
+			// Default (JSON) mode not supported for clone (requires interactive TUI)
+			if !formatter.HumanMode {
 				return formatError(cmd, "invalid_mode",
-					"--json mode is not supported for config clone (requires interactive form)",
+					"Interactive mode requires --human flag",
 					nil)
 			}
 
@@ -593,7 +635,6 @@ Examples:
 				sourceProfile.Port,
 				sourceProfile.Username,
 				sourceProfile.SSLMode,
-				sourceProfile.PoolSize,
 				sourcePassword, // Pre-fill password from source (may be empty)
 			)
 			if err != nil {
@@ -608,7 +649,6 @@ Examples:
 				Database: profileData.Database,
 				Username: profileData.Username,
 				SSLMode:  profileData.SSLMode,
-				PoolSize: profileData.PoolSize,
 				ReadOnly: true,
 			}
 
@@ -663,10 +703,10 @@ Examples:
 			formatter := getFormatter(cmd)
 			profileName := args[0]
 
-			// JSON mode not supported for edit (requires interactive TUI)
-			if formatter.JSONMode {
+			// Default (JSON) mode not supported for edit (requires interactive TUI)
+			if !formatter.HumanMode {
 				return formatError(cmd, "invalid_mode",
-					"--json mode is not supported for config edit (requires interactive form)",
+					"Interactive mode requires --human flag",
 					nil)
 			}
 
@@ -705,7 +745,6 @@ Examples:
 				existingProfile.Port,
 				existingProfile.Username,
 				existingProfile.SSLMode,
-				existingProfile.PoolSize,
 				existingPassword, // May be empty for passwordless profiles
 			)
 			if err != nil {
@@ -731,7 +770,6 @@ Examples:
 				Database: profileData.Database,
 				Username: profileData.Username,
 				SSLMode:  profileData.SSLMode,
-				PoolSize: profileData.PoolSize,
 				ReadOnly: true,
 			}
 
@@ -763,7 +801,65 @@ Examples:
 				fmt.Printf("✓ Using passwordless authentication\n")
 			}
 
+			// Prompt to test connection
+			var runTest bool
+			huh.NewConfirm().
+				Title("Test connection?").
+				Value(&runTest).
+				WithTheme(form.CustomTheme()).
+				Run()
+
+			if runTest {
+				result := runConnectionTest(ctx, profileData)
+				printConnectionTestResult(result)
+			}
+
 			return nil
 		},
+	}
+}
+
+// connectionTestResult holds the outcome of a connection test
+type connectionTestResult struct {
+	Success bool
+	Error   string
+}
+
+func (r *connectionTestResult) toMap() map[string]interface{} {
+	m := map[string]interface{}{
+		"status": "ok",
+	}
+	if !r.Success {
+		m["status"] = "failed"
+		m["error"] = r.Error
+	}
+	return m
+}
+
+// runConnectionTest tests a database connection using the given profile data
+func runConnectionTest(ctx context.Context, data *form.ProfileData) *connectionTestResult {
+	connConfig := &database.ConnectionConfig{
+		Host:     data.Host,
+		Port:     data.Port,
+		Database: data.Database,
+		Username: data.Username,
+		Password: data.Password,
+		SSLMode:  data.SSLMode,
+		ReadOnly: true,
+	}
+	conn, err := database.NewConnection(ctx, connConfig)
+	if err != nil {
+		return &connectionTestResult{Success: false, Error: err.Error()}
+	}
+	conn.Close(ctx)
+	return &connectionTestResult{Success: true}
+}
+
+// printConnectionTestResult prints the connection test result for human-readable output
+func printConnectionTestResult(result *connectionTestResult) {
+	if result.Success {
+		fmt.Println("✓ Connection test successful")
+	} else {
+		fmt.Printf("⚠ Connection test failed: %s\n", result.Error)
 	}
 }
