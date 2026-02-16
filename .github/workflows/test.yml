@@ -51,7 +51,7 @@ jobs:
       run: ./test/docker/ssl/generate-certs.sh
 
     - name: Start test containers
-      run: docker compose up -d --wait
+      run: sudo docker compose up -d --wait
 
     - name: Run integration tests
       run: |
@@ -61,7 +61,7 @@ jobs:
 
     - name: Stop test containers
       if: always()
-      run: docker compose down -v
+      run: sudo docker compose down -v
 
   lint:
     name: Lint
