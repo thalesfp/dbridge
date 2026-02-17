@@ -112,7 +112,9 @@ func TestMockStore_Delete(t *testing.T) {
 		Username: "testuser",
 		Password: "testpass",
 	}
-	store.Save(ctx, "test-profile", creds)
+	if err := store.Save(ctx, "test-profile", creds); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
 
 	// Delete credentials
 	err := store.Delete(ctx, "test-profile")
@@ -135,10 +137,12 @@ func TestMockStore_List(t *testing.T) {
 	// Add multiple profiles
 	profiles := []string{"profile1", "profile2", "profile3"}
 	for _, profile := range profiles {
-		store.Save(ctx, profile, Credentials{
+		if err := store.Save(ctx, profile, Credentials{
 			Username: profile + "-user",
 			Password: "password",
-		})
+		}); err != nil {
+			t.Fatalf("Save(%s) failed: %v", profile, err)
+		}
 	}
 
 	// List profiles
@@ -190,7 +194,9 @@ func TestMockStore_UpdateCredentials(t *testing.T) {
 		Username: "user1",
 		Password: "pass1",
 	}
-	store.Save(ctx, "test-profile", initialCreds)
+	if err := store.Save(ctx, "test-profile", initialCreds); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
 
 	// Update credentials
 	updatedCreds := Credentials{

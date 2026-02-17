@@ -26,7 +26,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.WithValue(cmd.Context(), "human_output", humanOutput)
+			ctx := context.WithValue(cmd.Context(), cli.HumanOutputKey, humanOutput)
 			cmd.SetContext(ctx)
 			return nil
 		},

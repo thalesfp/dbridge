@@ -18,6 +18,12 @@ import (
 	"golang.org/x/term"
 )
 
+// ContextKey is a custom type for context keys to avoid collisions.
+type ContextKey string
+
+// HumanOutputKey is the context key for the human output flag.
+const HumanOutputKey ContextKey = "human_output"
+
 // NewConfigCmd creates the config command
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -248,11 +254,13 @@ Examples:
 			} else {
 				// Interactive TUI mode: prompt the user
 				var runTest bool
-				huh.NewConfirm().
+				if err := huh.NewConfirm().
 					Title("Test connection?").
 					Value(&runTest).
 					WithTheme(form.CustomTheme()).
-					Run()
+					Run(); err != nil {
+					return fmt.Errorf("prompt failed: %w", err)
+				}
 
 				if runTest {
 					connTestResult = runConnectionTest(ctx, profileData)
@@ -363,7 +371,7 @@ func readPassword() ([]byte, error) {
 // getFormatter creates a formatter instance based on the human output flag
 func getFormatter(cmd *cobra.Command) *output.Formatter {
 	humanMode := false
-	if val := cmd.Context().Value("human_output"); val != nil {
+	if val := cmd.Context().Value(HumanOutputKey); val != nil {
 		humanMode = val.(bool)
 	}
 	return output.NewFormatter(humanMode)
@@ -380,7 +388,7 @@ func (e *HandledError) Error() string { return e.Message }
 func formatError(cmd *cobra.Command, code, message string, details interface{}) error {
 	formatter := getFormatter(cmd)
 	if !formatter.HumanMode {
-		formatter.Error(code, message, details)
+		_ = formatter.Error(code, message, details)
 		return &HandledError{Message: message}
 	}
 	return fmt.Errorf("%s", message)
@@ -752,8 +760,8 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 
 	if nameChanged {
 		// Remove old profile and credentials
-		cfg.RemoveProfile(profileName)
-		credStore.Delete(ctx, profileName)
+		_ = cfg.RemoveProfile(profileName)
+		_ = credStore.Delete(ctx, profileName)
 
 		fmt.Printf("ℹ️  Profile renamed from '%s' to '%s'\n", profileName, profileData.Name)
 	}
@@ -781,7 +789,7 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 		}
 	} else {
 		// If password is now empty, delete any existing credentials
-		credStore.Delete(ctx, profileData.Name)
+		_ = credStore.Delete(ctx, profileData.Name)
 	}
 
 	// Add/update profile in config
@@ -801,11 +809,13 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 
 	// Prompt to test connection
 	var runTest bool
-	huh.NewConfirm().
+	if err := huh.NewConfirm().
 		Title("Test connection?").
 		Value(&runTest).
 		WithTheme(form.CustomTheme()).
-		Run()
+		Run(); err != nil {
+		return fmt.Errorf("prompt failed: %w", err)
+	}
 
 	if runTest {
 		result := runConnectionTest(ctx, profileData)
@@ -992,7 +1002,7 @@ func deleteProfileConfirm(ctx context.Context, cfg *config.Config, name string) 
 	// Delete credentials
 	credStore, err := credentials.NewStore("dbridge")
 	if err == nil {
-		credStore.Delete(ctx, name)
+		_ = credStore.Delete(ctx, name)
 	}
 
 	// Remove profile

@@ -239,7 +239,7 @@ func TestMysqlReadOnly_Integration(t *testing.T) {
 	// Write should fail
 	_, err = conn.Exec(ctx, "CREATE TABLE _dbridge_ro_test (id INT)")
 	if err == nil {
-		conn.Exec(ctx, "DROP TABLE _dbridge_ro_test")
+		_, _ = conn.Exec(ctx, "DROP TABLE _dbridge_ro_test")
 		t.Fatal("Expected error for write on read-only connection")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "read only") &&
@@ -382,7 +382,7 @@ func TestMysqlConnectionPinning_Integration(t *testing.T) {
 	// Verify read-only is still enforced after multiple queries
 	_, err = conn.Exec(ctx, "CREATE TABLE _dbridge_pin_test (id INT)")
 	if err == nil {
-		conn.Exec(ctx, "DROP TABLE _dbridge_pin_test")
+		_, _ = conn.Exec(ctx, "DROP TABLE _dbridge_pin_test")
 		t.Fatal("Expected read-only error after multiple queries")
 	}
 }
