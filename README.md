@@ -151,6 +151,32 @@ profiles:
     # Password stored in OS Keychain
 ```
 
+## Credential Storage
+
+Credentials are stored in a **dedicated OS keychain named `dbridge`**, separate from your login keychain. The underlying library is [`99designs/keyring`](https://github.com/99designs/keyring), which maps to:
+
+- **macOS** — Keychain Access (`dbridge.keychain-db`)
+- **Windows** — Windows Credential Manager
+- **Linux** — Secret Service (GNOME Keyring / KWallet)
+
+Each profile's credentials are stored as `dbridge-<profile>` (e.g. `dbridge-local`). The config file (`~/.config/dbridge/config.yaml`) never contains passwords.
+
+### Why am I prompted for a password again?
+
+The dedicated `dbridge` keychain auto-locks after a period of inactivity or when the system sleeps. When it locks, dbridge will prompt for the keychain password to unlock it.
+
+To adjust the lock timeout on macOS:
+
+- Open **Keychain Access** → select the `dbridge` keychain → right-click **Change Settings for Keychain** → set the idle timeout or disable "Lock when sleeping"
+- Or via terminal:
+  ```bash
+  # Lock after 1 hour (3600 seconds) of inactivity, don't lock on sleep
+  security set-keychain-settings -t 3600 ~/Library/Keychains/dbridge.keychain-db
+
+  # Never auto-lock (not recommended)
+  security set-keychain-settings ~/Library/Keychains/dbridge.keychain-db
+  ```
+
 ## License
 
 MIT License - see LICENSE file for details.
