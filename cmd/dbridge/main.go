@@ -70,6 +70,7 @@ func main() {
 	rootCmd.AddCommand(cli.NewConfigCmd())
 	rootCmd.AddCommand(cli.NewQueryCmd())
 	rootCmd.AddCommand(cli.NewSchemaCmd())
+	rootCmd.AddCommand(cli.NewMCPCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		// Skip re-outputting errors that were already formatted as JSON

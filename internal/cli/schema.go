@@ -153,6 +153,14 @@ Examples:
 
 // getConnection is a helper to create a database connection
 func getConnection(profileName string) (database.Connection, error) {
+	return getConnectionWithConfig(profileName, false)
+}
+
+func getReadOnlyConnection(profileName string) (database.Connection, error) {
+	return getConnectionWithConfig(profileName, true)
+}
+
+func getConnectionWithConfig(profileName string, forceReadOnly bool) (database.Connection, error) {
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
@@ -180,6 +188,8 @@ func getConnection(profileName string) (database.Connection, error) {
 		return nil, fmt.Errorf("failed to load credentials: %w", err)
 	}
 
+	readOnly := profileConfig.ReadOnly || forceReadOnly
+
 	// Create database connection
 	connConfig := &database.ConnectionConfig{
 		Driver:   profileConfig.Driver,
@@ -189,7 +199,7 @@ func getConnection(profileName string) (database.Connection, error) {
 		Username: creds.Username,
 		Password: creds.Password,
 		SSLMode:  profileConfig.SSLMode,
-		ReadOnly: profileConfig.ReadOnly,
+		ReadOnly: readOnly,
 	}
 
 	conn, err := database.NewConnection(ctx, connConfig)
