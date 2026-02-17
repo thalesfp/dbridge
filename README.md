@@ -79,6 +79,54 @@ dbridge config show local
 dbridge config remove staging
 ```
 
+## MCP Server
+
+dbridge includes an MCP server that exposes read-only database tools over stdio.
+
+**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "dbridge": {
+      "command": "/path/to/dbridge",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+**Claude Code:**
+
+```bash
+claude mcp add dbridge -- /path/to/dbridge mcp
+```
+
+**Codex** — add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.dbridge]
+command = "/path/to/dbridge"
+args = ["mcp"]
+```
+
+Or via CLI:
+
+```bash
+codex mcp add dbridge -- /path/to/dbridge mcp
+```
+
+**Available Tools:**
+
+| Tool | Description |
+|------|-------------|
+| `query` | Execute a read-only SQL query |
+| `list_profiles` | List configured database profiles |
+| `list_schemas` | List schemas in a database |
+| `list_tables` | List tables in a schema |
+| `describe_table` | Describe table structure |
+| `explain_query` | Show query execution plan |
+
 ## Configuration
 
 Configuration file: `~/.config/dbridge/config.yaml`
