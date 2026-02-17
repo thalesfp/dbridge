@@ -47,6 +47,9 @@ jobs:
     - name: Generate SSL certs
       run: ./test/docker/ssl/generate-certs.sh
 
+    - name: Clean up previous containers
+      run: docker compose down -v || true
+
     - name: Start test containers
       run: docker compose up -d --wait
 
