@@ -94,6 +94,7 @@ services:
   dbridge-mysql-primary:
     image: mysql:8.0
     container_name: dbridge-mysql-primary
+    command: --default-authentication-plugin=mysql_native_password
     environment:
       MYSQL_USER: dbridge
       MYSQL_PASSWORD: dbridge
