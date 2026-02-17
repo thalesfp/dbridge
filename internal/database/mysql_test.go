@@ -199,7 +199,7 @@ func mysqlTestConfig(t *testing.T, readOnly bool) *ConnectionConfig {
 		Database: cfg.DBName,
 		Username: cfg.User,
 		Password: cfg.Passwd,
-		SSLMode:  "prefer",
+		SSLMode:  "disable",
 		ReadOnly: readOnly,
 	}
 }

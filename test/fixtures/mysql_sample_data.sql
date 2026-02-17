@@ -1,5 +1,8 @@
 -- Sample data for testing dbridge with MySQL
 
+-- Use mysql_native_password so connections work without TLS
+ALTER USER 'dbridge'@'%' IDENTIFIED WITH mysql_native_password BY 'dbridge';
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
