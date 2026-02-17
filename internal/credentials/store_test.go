@@ -203,7 +203,9 @@ func TestMockStore_UpdateCredentials(t *testing.T) {
 		Username: "user2",
 		Password: "pass2",
 	}
-	store.Save(ctx, "test-profile", updatedCreds)
+	if err := store.Save(ctx, "test-profile", updatedCreds); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
 
 	// Load and verify updated credentials
 	loadedCreds, err := store.Load(ctx, "test-profile")
