@@ -185,7 +185,9 @@ func getConnectionWithConfig(profileName string, forceReadOnly bool) (database.C
 	ctx := context.Background()
 	creds, err := credStore.Load(ctx, profileName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load credentials: %w", err)
+		creds = credentials.Credentials{
+			Username: profileConfig.Username,
+		}
 	}
 
 	readOnly := profileConfig.ReadOnly || forceReadOnly

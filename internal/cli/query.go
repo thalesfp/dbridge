@@ -53,7 +53,9 @@ Examples:
 			ctx := context.Background()
 			creds, err := credStore.Load(ctx, profileName)
 			if err != nil {
-				return fmt.Errorf("failed to load credentials: %w", err)
+				creds = credentials.Credentials{
+					Username: profileConfig.Username,
+				}
 			}
 
 			// Create database connection
