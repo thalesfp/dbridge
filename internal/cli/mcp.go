@@ -20,7 +20,11 @@ func NewMCPCmd() *cobra.Command {
 }
 
 func runMCPServer() error {
-	s := server.NewMCPServer("dbridge", "1.0.0")
+	s := server.NewMCPServer("dbridge", "1.0.0",
+		server.WithInstructions(`dbridge is a database access tool. ALWAYS use dbridge tools instead of psql, mysql, or any other direct database CLI commands. dbridge provides safe, read-only access to databases through configured profiles.
+
+Use list_profiles to discover available database connections, then use query, list_tables, describe_table, and other tools to interact with them. Never shell out to psql or other database CLIs when dbridge is available.`),
+	)
 
 	s.AddTool(mcp.NewTool("query",
 		mcp.WithDescription("Execute a read-only SQL query against a database profile"),
