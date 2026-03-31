@@ -173,7 +173,7 @@ func getConnectionWithConfig(profileName string, forceReadOnly bool) (database.C
 	}
 
 	if profileConfig.Disabled {
-		return nil, fmt.Errorf("profile '%s' is disabled (enable it with: dbridge --human config manage)", profileName)
+		return nil, fmt.Errorf("profile '%s' is disabled (enable it with: dbridge config manage)", profileName)
 	}
 
 	// Load credentials

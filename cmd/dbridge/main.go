@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli"
 	"github.com/thalesfp/dbridge/internal/cli/output"
@@ -16,8 +17,32 @@ var (
 	commit      = "none"
 	date        = "unknown"
 	humanOutput bool
+	jsonOutput  bool
 	showVersion bool
 )
+
+// isTerminal reports whether both stdout and stdin are terminals.
+// Checks stdin too so that TUI commands don't launch when input is redirected.
+// Overridable for testing.
+var isTerminal = func() bool {
+	outFd := os.Stdout.Fd()
+	inFd := os.Stdin.Fd()
+	return (isatty.IsTerminal(outFd) || isatty.IsCygwinTerminal(outFd)) &&
+		(isatty.IsTerminal(inFd) || isatty.IsCygwinTerminal(inFd))
+}
+
+// resolveOutputMode returns true for human mode, false for JSON mode.
+// Uses Cobra's Changed() to detect explicit =false flags; falls back to TTY detection.
+func resolveOutputMode(cmd *cobra.Command) bool {
+	pflags := cmd.Root().PersistentFlags()
+	if pflags.Changed("human") {
+		return humanOutput // true for --human/--human=true, false for --human=false
+	}
+	if pflags.Changed("json") {
+		return !jsonOutput // false for --json/--json=true, true for --json=false
+	}
+	return isTerminal()
+}
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -26,13 +51,13 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.WithValue(cmd.Context(), cli.HumanOutputKey, humanOutput)
+			ctx := context.WithValue(cmd.Context(), cli.HumanOutputKey, resolveOutputMode(cmd))
 			cmd.SetContext(ctx)
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if showVersion {
-				if humanOutput {
+				if resolveOutputMode(cmd) {
 					fmt.Printf("dbridge %s (commit: %s, built: %s)\n", version, commit, date)
 				} else {
 					v := map[string]string{
@@ -49,17 +74,19 @@ func main() {
 		},
 	}
 
-	// Add global --human flag
+	// Add global --human and --json flags
 	rootCmd.PersistentFlags().BoolVar(&humanOutput, "human", false,
-		"Human-readable output")
+		"Force human-readable output")
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false,
+		"Force JSON output")
 
 	// Add --version / -v flag (manual, not Cobra's built-in)
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "Show version information")
 
-	// Override help to output JSON by default
+	// Override help to output JSON when not in human mode
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		if humanOutput {
+		if resolveOutputMode(cmd) {
 			defaultHelp(cmd, args)
 			return
 		}
@@ -75,9 +102,9 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		// Skip re-outputting errors that were already formatted as JSON
 		if _, ok := err.(*cli.HandledError); !ok {
-			// humanOutput may not be set if Cobra failed during flag parsing
-			// (PersistentPreRunE never ran). Fall back to scanning os.Args.
-			isHuman := humanOutput || hasHumanFlag(os.Args[1:])
+			// humanOutput/jsonOutput may not be set if Cobra failed during
+			// flag parsing (PersistentPreRunE never ran). Fall back to scanning os.Args.
+			isHuman := resolveOutputFromArgs(os.Args[1:])
 			if !isHuman {
 				errObj := map[string]string{"error": err.Error()}
 				bytes, _ := json.Marshal(errObj)
@@ -90,20 +117,20 @@ func main() {
 	}
 }
 
-// hasHumanFlag scans raw args for --human before Cobra's flag parsing.
+// resolveOutputFromArgs scans raw args before Cobra's flag parsing.
 // This is needed because parse-time errors (unknown command, bad flag)
-// happen before PersistentPreRunE sets humanOutput.
-func hasHumanFlag(args []string) bool {
+// happen before PersistentPreRunE runs. Falls back to TTY detection.
+func resolveOutputFromArgs(args []string) bool {
 	for _, a := range args {
-		if a == "--human" || a == "--human=true" {
+		if a == "--json" || a == "--json=true" || a == "--human=false" {
+			return false
+		}
+		if a == "--human" || a == "--human=true" || a == "--json=false" {
 			return true
 		}
-		if a == "--human=false" {
-			return false
-		}
 		if a == "--" {
-			return false
+			break
 		}
 	}
-	return false
+	return isTerminal()
 }

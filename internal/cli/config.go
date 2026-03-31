@@ -94,7 +94,7 @@ Examples:
 			// Default (JSON) mode requires flag mode (no interactive TUI)
 			if !formatter.HumanMode && !flagMode {
 				return formatError(cmd, "invalid_mode",
-					"Interactive mode requires --human flag",
+					"Interactive mode requires a terminal (or --human flag)",
 					nil)
 			}
 
@@ -623,7 +623,7 @@ Examples:
 			// Default (JSON) mode not supported for clone (requires interactive TUI)
 			if !formatter.HumanMode {
 				return formatError(cmd, "invalid_mode",
-					"Interactive mode requires --human flag",
+					"Interactive mode requires a terminal (or --human flag)",
 					nil)
 			}
 
@@ -833,17 +833,17 @@ func newConfigManageCmd() *cobra.Command {
 		Long: `Interactively manage database connection profiles.
 
 Provides a menu to enable/disable and delete profiles.
-Requires --human flag for interactive mode.
+Requires a terminal for interactive mode.
 
 Examples:
-  dbridge --human config manage
+  dbridge config manage
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			formatter := getFormatter(cmd)
 
 			if !formatter.HumanMode {
 				return formatError(cmd, "invalid_mode",
-					"Interactive mode requires --human flag",
+					"Interactive mode requires a terminal (or --human flag)",
 					nil)
 			}
 

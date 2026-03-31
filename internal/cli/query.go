@@ -41,7 +41,7 @@ Examples:
 			}
 
 			if profileConfig.Disabled {
-				return fmt.Errorf("profile '%s' is disabled (enable it with: dbridge --human config manage)", profileName)
+				return fmt.Errorf("profile '%s' is disabled (enable it with: dbridge config manage)", profileName)
 			}
 
 			// Load credentials

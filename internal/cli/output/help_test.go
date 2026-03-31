@@ -24,7 +24,8 @@ func TestFormatHelpJSON_RootWithSubcommands(t *testing.T) {
 		RunE:  func(cmd *cobra.Command, args []string) error { return nil },
 	}
 	root.AddCommand(sub1, sub2)
-	root.PersistentFlags().Bool("human", false, "Human-readable output")
+	root.PersistentFlags().Bool("human", false, "Force human-readable output")
+	root.PersistentFlags().Bool("json", false, "Force JSON output")
 
 	var buf bytes.Buffer
 	FormatHelpJSON(root, &buf)
@@ -49,8 +50,9 @@ func TestFormatHelpJSON_RootWithSubcommands(t *testing.T) {
 	if h.Subcommands[1].Name != "query" {
 		t.Errorf("expected second subcommand 'query', got %q", h.Subcommands[1].Name)
 	}
-	// --human should appear as a local flag on root (persistent flags are local to the defining command)
+	// --human and --json should appear as local flags on root
 	foundHuman := false
+	foundJSON := false
 	for _, f := range h.Flags {
 		if f.Name == "--human" {
 			foundHuman = true
@@ -58,9 +60,18 @@ func TestFormatHelpJSON_RootWithSubcommands(t *testing.T) {
 				t.Errorf("expected human flag type 'bool', got %q", f.Type)
 			}
 		}
+		if f.Name == "--json" {
+			foundJSON = true
+			if f.Type != "bool" {
+				t.Errorf("expected json flag type 'bool', got %q", f.Type)
+			}
+		}
 	}
 	if !foundHuman {
 		t.Error("expected --human in flags")
+	}
+	if !foundJSON {
+		t.Error("expected --json in flags")
 	}
 }
 
@@ -69,7 +80,8 @@ func TestFormatHelpJSON_LeafWithFlags(t *testing.T) {
 		Use:   "dbridge",
 		Short: "Multi-database CLI for AI agents",
 	}
-	root.PersistentFlags().Bool("human", false, "Human-readable output")
+	root.PersistentFlags().Bool("human", false, "Force human-readable output")
+	root.PersistentFlags().Bool("json", false, "Force JSON output")
 
 	config := &cobra.Command{
 		Use:   "config",
