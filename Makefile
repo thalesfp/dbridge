@@ -14,6 +14,10 @@ build: ## Build dbridge binary
 	go build -o bin/dbridge ./cmd/dbridge
 	@echo "✓ Binary created at bin/dbridge"
 
+.PHONY: run
+run: build ## Build and run dbridge (pass args with ARGS=)
+	@./bin/dbridge $(ARGS)
+
 ###################
 # Installation
 ###################
