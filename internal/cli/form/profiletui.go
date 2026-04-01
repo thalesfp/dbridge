@@ -1,0 +1,693 @@
+package form
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/thalesfp/dbridge/internal/config"
+)
+
+// Colors (matching the shared palette in cli/styles.go)
+const (
+	colorAccent = lipgloss.Color("81")
+	colorDim    = lipgloss.Color("243")
+	colorError  = lipgloss.Color("196")
+	colorMuted  = lipgloss.Color("240")
+)
+
+var (
+	formTitleStyle     = lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
+	formLabelStyle     = lipgloss.NewStyle().Width(12).Foreground(colorDim)
+	formActiveLabel    = lipgloss.NewStyle().Width(12).Foreground(colorAccent).Bold(true)
+	formErrorStyle     = lipgloss.NewStyle().Foreground(colorError)
+	formHelpStyle      = lipgloss.NewStyle().Foreground(colorDim)
+	formSelectActive   = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+	formSelectInactive = lipgloss.NewStyle().Foreground(colorMuted)
+	formCursorStyle    = lipgloss.NewStyle().Foreground(colorAccent)
+	formDialogSuccess  = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("82")).
+				Padding(1, 3)
+	formDialogFail     = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("214")).
+				Padding(1, 3)
+	formDialogTitle    = lipgloss.NewStyle().Bold(true)
+	formDialogHintStyle = lipgloss.NewStyle().Foreground(colorDim)
+)
+
+type selectOption struct {
+	label string
+	value string
+}
+
+type fieldKind int
+
+const (
+	fieldText   fieldKind = iota
+	fieldSelect
+)
+
+// Field indices (main screen — no password)
+const (
+	fDriver   = 0
+	fName     = 1
+	fDatabase = 2
+	fHost     = 3
+	fPort     = 4
+	fUsername  = 5
+	fSSLMode  = 6
+	fieldCount = 7
+)
+
+type formField struct {
+	kind     fieldKind
+	label    string
+	input    textinput.Model
+	options  []selectOption
+	selected int
+	validate func(string) error
+}
+
+// FormOption configures the profile form.
+type FormOption func(*profileFormModel)
+
+// WithTestConnection adds a "test connection" keybind (ctrl+t) to the form.
+// The callback receives current field values and returns "" on success or an error message.
+func WithTestConnection(fn func(*ProfileData) string) FormOption {
+	return func(m *profileFormModel) {
+		m.testFn = fn
+	}
+}
+
+// WithSave adds an in-form save callback. On submit, the form calls fn with the profile data.
+// Returns "" on success or an error message. The result is shown as a dialog before the form exits.
+func WithSave(fn func(*ProfileData) string) FormOption {
+	return func(m *profileFormModel) {
+		m.saveFn = fn
+	}
+}
+
+type profileFormModel struct {
+	fields     []formField
+	focusIndex int
+	err        string
+	submitted  bool
+	cancelled  bool
+
+	// Password (separate screen)
+	password   string
+	editingPw  bool
+	pwInput    textinput.Model
+	pwConfirm  textinput.Model
+	pwFocus    int
+	pwVisible  bool
+	origPw     string
+
+	// Callbacks
+	testFn func(*ProfileData) string
+	saveFn func(*ProfileData) string
+
+	// Dialog overlay
+	dialogMsg string // non-empty = show centered dialog
+	dialogOk  bool   // true = success style, false = failure style
+	saved     bool   // true = dismiss dialog should quit
+
+	editMode bool
+	defaults *ProfileData
+	width    int
+	height   int
+}
+
+func newTextInput(placeholder string, value string) textinput.Model {
+	ti := textinput.New()
+	ti.Placeholder = placeholder
+	ti.SetValue(value)
+	ti.CharLimit = 256
+	ti.Width = 30
+	return ti
+}
+
+func newPasswordInput(placeholder string, value string) textinput.Model {
+	ti := textinput.New()
+	ti.Placeholder = placeholder
+	ti.SetValue(value)
+	ti.EchoMode = textinput.EchoPassword
+	ti.EchoCharacter = '•'
+	ti.CharLimit = 256
+	ti.Width = 30
+	return ti
+}
+
+func newProfileFormModel(initial *ProfileData) profileFormModel {
+	// Start with creation defaults
+	data := &ProfileData{
+		Driver:  "postgres",
+		Host:    "localhost",
+		Port:    5432,
+		SSLMode: "prefer",
+	}
+	origPw := ""
+	if initial != nil {
+		// Merge: only override fields that have non-zero values
+		if initial.Driver != "" {
+			data.Driver = initial.Driver
+		}
+		if initial.Name != "" {
+			data.Name = initial.Name
+		}
+		data.Database = initial.Database
+		if initial.Host != "" {
+			data.Host = initial.Host
+		}
+		if initial.Port != 0 {
+			data.Port = initial.Port
+		}
+		data.Username = initial.Username
+		if initial.SSLMode != "" {
+			data.SSLMode = initial.SSLMode
+		}
+		data.Password = initial.Password
+		origPw = initial.Password
+	}
+
+	driverIdx := 0
+	if data.Driver == "mysql" {
+		driverIdx = 1
+	}
+
+	sslIdx := 1 // prefer
+	switch data.SSLMode {
+	case "disable":
+		sslIdx = 0
+	case "require":
+		sslIdx = 2
+	}
+
+	portStr := strconv.Itoa(data.Port)
+	if data.Port == 0 {
+		portStr = "5432"
+	}
+
+	fields := []formField{
+		{kind: fieldSelect, label: "Driver", options: []selectOption{
+			{"PostgreSQL", "postgres"}, {"MySQL", "mysql"},
+		}, selected: driverIdx},
+		{kind: fieldText, label: "Name", input: newTextInput("production-db", data.Name), validate: validateProfileName},
+		{kind: fieldText, label: "Database", input: newTextInput("myapp", data.Database), validate: validateNotEmpty("Database")},
+		{kind: fieldText, label: "Host", input: newTextInput("localhost", data.Host), validate: validateNotEmpty("Host")},
+		{kind: fieldText, label: "Port", input: newTextInput("5432", portStr), validate: validatePort},
+		{kind: fieldText, label: "Username", input: newTextInput("postgres", data.Username), validate: validateNotEmpty("Username")},
+		{kind: fieldSelect, label: "SSL Mode", options: []selectOption{
+			{"Disable", "disable"}, {"Prefer", "prefer"}, {"Require", "require"},
+		}, selected: sslIdx},
+	}
+
+	// Edit mode if initial has a host set (not just a name for creation)
+	isEdit := initial != nil && initial.Host != ""
+
+	// In add mode, password is an inline field; in edit mode, it's a separate screen
+	if !isEdit {
+		fields = append(fields, formField{
+			kind:  fieldText,
+			label: "Password",
+			input: newPasswordInput("optional", data.Password),
+		})
+	}
+
+	return profileFormModel{
+		fields:     fields,
+		focusIndex: 0,
+		password:   data.Password,
+		origPw:     origPw,
+		editMode:   isEdit,
+		defaults:   data,
+	}
+}
+
+func (m profileFormModel) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+func (m profileFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
+	case tea.KeyMsg:
+		// Dismiss dialog overlay on any key
+		if m.dialogMsg != "" {
+			if m.saved {
+				m.submitted = true
+				return m, tea.Quit
+			}
+			m.dialogMsg = ""
+			return m, nil
+		}
+		if m.editingPw {
+			return m.updatePassword(msg)
+		}
+		return m.updateMain(msg)
+	}
+
+	// Forward non-key messages to active text input
+	if m.editingPw {
+		return m.forwardToPwInput(msg)
+	}
+
+	f := &m.fields[m.focusIndex]
+	if f.kind == fieldText {
+		var cmd tea.Cmd
+		f.input, cmd = f.input.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+func (m profileFormModel) forwardToPwInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.pwFocus == 0 {
+		var cmd tea.Cmd
+		m.pwInput, cmd = m.pwInput.Update(msg)
+		return m, cmd
+	}
+	var cmd tea.Cmd
+	m.pwConfirm, cmd = m.pwConfirm.Update(msg)
+	return m, cmd
+}
+
+func (m profileFormModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.cancelled = true
+		return m, tea.Quit
+
+	case "esc":
+		m.cancelled = true
+		return m, tea.Quit
+
+	case "tab", "down":
+		if m.focusIndex < len(m.fields)-1 {
+			m.blurField(m.focusIndex)
+			m.focusIndex++
+			m.err = ""
+			m.focusField(m.focusIndex)
+		}
+		return m, nil
+
+	case "shift+tab", "up":
+		if m.focusIndex > 0 {
+			m.blurField(m.focusIndex)
+			m.focusIndex--
+			m.err = ""
+			m.focusField(m.focusIndex)
+		}
+		return m, nil
+
+	case "left":
+		f := &m.fields[m.focusIndex]
+		if f.kind == fieldSelect && f.selected > 0 {
+			f.selected--
+			return m, nil
+		}
+		// Fall through to text input forwarding for cursor movement
+
+	case "right":
+		f := &m.fields[m.focusIndex]
+		if f.kind == fieldSelect && f.selected < len(f.options)-1 {
+			f.selected++
+			return m, nil
+		}
+		// Fall through to text input forwarding for cursor movement
+
+	case "ctrl+p":
+		if m.editMode {
+			m.enterPasswordScreen()
+		}
+		return m, nil
+
+	case "ctrl+t":
+		if m.testFn != nil {
+			data := m.toProfileData()
+			result := m.testFn(data)
+			if result == "" {
+				m.dialogMsg = "✓ Connection successful"
+				m.dialogOk = true
+			} else {
+				m.dialogMsg = "⚠ " + result
+				m.dialogOk = false
+			}
+			m.err = ""
+		}
+		return m, nil
+
+	case "enter":
+		if err := m.validateAll(); err != "" {
+			m.err = err
+			return m, nil
+		}
+		if m.saveFn != nil {
+			data := m.toProfileData()
+			result := m.saveFn(data)
+			if result == "" {
+				m.dialogMsg = fmt.Sprintf("✓ Profile '%s' saved", data.Name)
+				m.dialogOk = true
+				m.saved = true
+			} else {
+				m.dialogMsg = "⚠ " + result
+				m.dialogOk = false
+			}
+			return m, nil
+		}
+		m.submitted = true
+		return m, tea.Quit
+	}
+
+	// Forward to active text input (must be after special key handling)
+	f := &m.fields[m.focusIndex]
+	if f.kind == fieldText {
+		var cmd tea.Cmd
+		f.input, cmd = f.input.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+func (m *profileFormModel) enterPasswordScreen() {
+	m.editingPw = true
+	m.pwInput = newPasswordInput("password", "")
+	m.pwConfirm = newPasswordInput("confirm password", "")
+	m.pwFocus = 0
+	m.pwVisible = false
+	m.pwInput.Focus()
+	m.err = ""
+}
+
+func (m profileFormModel) updatePassword(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.cancelled = true
+		return m, tea.Quit
+
+	case "esc":
+		m.editingPw = false
+		m.err = ""
+		return m, nil
+
+	case "tab", "down":
+		if m.pwFocus == 0 {
+			m.pwInput.Blur()
+			m.pwFocus = 1
+			m.pwConfirm.Focus()
+		}
+		return m, nil
+
+	case "shift+tab", "up":
+		if m.pwFocus == 1 {
+			m.pwConfirm.Blur()
+			m.pwFocus = 0
+			m.pwInput.Focus()
+		}
+		return m, nil
+
+	case "ctrl+g":
+		m.pwVisible = !m.pwVisible
+		if m.pwVisible {
+			m.pwInput.EchoMode = textinput.EchoNormal
+			m.pwConfirm.EchoMode = textinput.EchoNormal
+		} else {
+			m.pwInput.EchoMode = textinput.EchoPassword
+			m.pwConfirm.EchoMode = textinput.EchoPassword
+		}
+		return m, nil
+
+	case "enter":
+		pw := m.pwInput.Value()
+		confirm := m.pwConfirm.Value()
+		if pw != "" && pw != confirm {
+			m.dialogMsg = "⚠ Passwords do not match"
+			m.dialogOk = false
+			return m, nil
+		}
+		m.password = pw
+		m.editingPw = false
+		m.err = ""
+		if pw != "" {
+			m.dialogMsg = "✓ Password updated"
+		} else {
+			m.dialogMsg = "✓ Password cleared"
+		}
+		m.dialogOk = true
+		return m, nil
+	}
+
+	return m.forwardToPwInput(msg)
+}
+
+func (m *profileFormModel) focusField(idx int) {
+	f := &m.fields[idx]
+	if f.kind == fieldText {
+		f.input.Focus()
+	}
+}
+
+func (m *profileFormModel) blurField(idx int) {
+	f := &m.fields[idx]
+	if f.kind == fieldText {
+		f.input.Blur()
+	}
+}
+
+func (m profileFormModel) validateAll() string {
+	for i := range m.fields {
+		f := &m.fields[i]
+		if f.validate != nil && f.kind == fieldText {
+			if err := f.validate(f.input.Value()); err != nil {
+				return fmt.Sprintf("%s: %s", f.label, err.Error())
+			}
+		}
+	}
+	return ""
+}
+
+func (m profileFormModel) View() string {
+	if m.submitted || m.cancelled {
+		return ""
+	}
+
+	// Dialog overlay takes priority over all views
+	if m.dialogMsg != "" {
+		style := formDialogFail
+		titleStyle := formDialogTitle.Foreground(lipgloss.Color("214"))
+		if m.dialogOk {
+			style = formDialogSuccess
+			titleStyle = formDialogTitle.Foreground(lipgloss.Color("82"))
+		}
+		dialog := titleStyle.Render(m.dialogMsg) +
+			"\n\n" +
+			formDialogHintStyle.Render("press any key to continue")
+		box := style.Render(dialog)
+
+		w := m.width
+		h := m.height
+		if w == 0 {
+			w = 60
+		}
+		if h == 0 {
+			h = 20
+		}
+		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box)
+	}
+
+	if m.editingPw {
+		return m.viewPassword()
+	}
+
+	return m.viewMain()
+}
+
+func (m profileFormModel) viewMain() string {
+	var b strings.Builder
+
+	title := "Add Profile"
+	if m.editMode {
+		title = "Edit Profile"
+	}
+	b.WriteString(fmt.Sprintf("\n  %s\n\n", formTitleStyle.Render(title)))
+
+	for i := range m.fields {
+		f := &m.fields[i]
+		active := i == m.focusIndex
+
+		label := formLabelStyle.Render(f.label)
+		if active {
+			label = formActiveLabel.Render(f.label)
+		}
+
+		cursor := "  "
+		if active {
+			cursor = formCursorStyle.Render("▸ ")
+		}
+
+		switch f.kind {
+		case fieldText:
+			b.WriteString(fmt.Sprintf("  %s%s %s\n", cursor, label, f.input.View()))
+		case fieldSelect:
+			b.WriteString(fmt.Sprintf("  %s%s %s\n", cursor, label, m.renderSelect(f, active)))
+		}
+	}
+
+	// In edit mode, show password status line with ctrl+p hint
+	if m.editMode {
+		pwStatus := formHelpStyle.Render("(none)")
+		if m.password != "" {
+			pwStatus = formHelpStyle.Render("•••••")
+		}
+		pwLabel := formLabelStyle.Render("Password")
+		b.WriteString(fmt.Sprintf("    %s %s  %s\n", pwLabel, pwStatus, formHelpStyle.Render("ctrl+p to change")))
+	}
+
+	if m.err != "" {
+		b.WriteString(fmt.Sprintf("\n  %s\n", formErrorStyle.Render(m.err)))
+	}
+
+	extras := ""
+	if m.testFn != nil {
+		extras += " · ctrl+t test"
+	}
+	if m.editMode {
+		extras += " · ctrl+p password"
+	}
+	help := "↑↓ navigate · ←→ select" + extras + " · enter save · esc cancel"
+	b.WriteString(fmt.Sprintf("\n  %s\n", formHelpStyle.Render(help)))
+
+	return b.String()
+}
+
+func (m profileFormModel) viewPassword() string {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("\n  %s\n\n", formTitleStyle.Render("Change Password")))
+
+	visLabel := "hidden"
+	if m.pwVisible {
+		visLabel = "visible"
+	}
+
+	// Password input
+	pwLabel := formLabelStyle.Render("Password")
+	pwCursor := "  "
+	if m.pwFocus == 0 {
+		pwLabel = formActiveLabel.Render("Password")
+		pwCursor = formCursorStyle.Render("▸ ")
+	}
+	b.WriteString(fmt.Sprintf("  %s%s %s\n", pwCursor, pwLabel, m.pwInput.View()))
+
+	// Confirm input
+	cfLabel := formLabelStyle.Render("Confirm")
+	cfCursor := "  "
+	if m.pwFocus == 1 {
+		cfLabel = formActiveLabel.Render("Confirm")
+		cfCursor = formCursorStyle.Render("▸ ")
+	}
+	b.WriteString(fmt.Sprintf("  %s%s %s\n", cfCursor, cfLabel, m.pwConfirm.View()))
+
+	if m.err != "" {
+		b.WriteString(fmt.Sprintf("\n  %s\n", formErrorStyle.Render(m.err)))
+	}
+
+	b.WriteString(fmt.Sprintf("\n  %s\n",
+		formHelpStyle.Render(fmt.Sprintf("tab next · ctrl+g show/hide (%s) · enter save · esc cancel", visLabel))))
+
+	return b.String()
+}
+
+func (m profileFormModel) renderSelect(f *formField, active bool) string {
+	parts := make([]string, 0, len(f.options))
+	for i, opt := range f.options {
+		if i == f.selected {
+			if active {
+				parts = append(parts, formSelectActive.Render("▸ "+opt.label))
+			} else {
+				parts = append(parts, formSelectActive.Render(opt.label))
+			}
+		} else {
+			parts = append(parts, formSelectInactive.Render(opt.label))
+		}
+	}
+	return strings.Join(parts, "  ")
+}
+
+func (m profileFormModel) toProfileData() *ProfileData {
+	port, _ := strconv.Atoi(m.fields[fPort].input.Value())
+
+	driver := m.fields[fDriver].options[m.fields[fDriver].selected].value
+	sslMode := m.fields[fSSLMode].options[m.fields[fSSLMode].selected].value
+
+	// In add mode, password comes from the inline field; in edit mode, from m.password
+	pw := m.password
+	if !m.editMode && len(m.fields) > fSSLMode+1 {
+		pw = m.fields[fSSLMode+1].input.Value()
+	}
+
+	data := &ProfileData{
+		Driver:   driver,
+		Name:     m.fields[fName].input.Value(),
+		Database: m.fields[fDatabase].input.Value(),
+		Host:     m.fields[fHost].input.Value(),
+		Port:     port,
+		Username: m.fields[fUsername].input.Value(),
+		SSLMode:  sslMode,
+		Password: pw,
+	}
+
+	origDriver := "postgres"
+	origPort := 5432
+	origSSL := "prefer"
+	if m.defaults != nil {
+		origDriver = m.defaults.Driver
+		origPort = m.defaults.Port
+		origSSL = m.defaults.SSLMode
+	}
+
+	if data.Driver != origDriver {
+		if defaults, ok := config.DriverDefaultsMap()[data.Driver]; ok {
+			if data.Port == origPort {
+				data.Port = defaults.Port
+			}
+			if data.SSLMode == origSSL {
+				data.SSLMode = defaults.SSLMode
+			}
+		}
+	}
+
+	return data
+}
+
+// RunProfileForm runs the interactive profile form.
+// Pass nil for creation mode, or a ProfileData for edit/clone mode.
+func RunProfileForm(initial *ProfileData, opts ...FormOption) (*ProfileData, error) {
+	m := newProfileFormModel(initial)
+	for _, opt := range opts {
+		opt(&m)
+	}
+	p := tea.NewProgram(m)
+	final, err := p.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	result := final.(profileFormModel)
+	if result.cancelled {
+		return nil, fmt.Errorf("form cancelled")
+	}
+
+	return result.toProfileData(), nil
+}

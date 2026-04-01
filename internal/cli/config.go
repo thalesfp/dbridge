@@ -3,12 +3,9 @@ package cli
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"syscall"
 
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli/form"
 	"github.com/thalesfp/dbridge/internal/cli/output"
@@ -182,89 +179,64 @@ Examples:
 					Password: password,
 				}
 			} else {
-				// Interactive TUI mode
+				// Interactive TUI mode — form handles saving via WithSave
 				initialName := ""
 				if len(args) > 0 {
 					initialName = args[0]
 				}
 
-				profileData, err = form.NewProfileForm(initialName)
+				initial := &form.ProfileData{Name: initialName}
+				profileData, err = form.RunProfileForm(initial, testConnectionOption(), form.WithSave(saveProfileCallback))
 				if err != nil {
 					return fmt.Errorf("form cancelled or error: %w", err)
 				}
 			}
 
-			// Load config
-			cfg, err := config.Load()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
+			if flagMode {
+				// Flag-based mode: save manually (interactive mode already saved via callback)
+				cfg, err := config.Load()
+				if err != nil {
+					return fmt.Errorf("failed to load config: %w", err)
+				}
 
-			// Create profile
-			profile := &config.Profile{
-				Driver:   profileData.Driver,
-				Name:     profileData.Name,
-				Host:     profileData.Host,
-				Port:     profileData.Port,
-				Database: profileData.Database,
-				Username: profileData.Username,
-				SSLMode:  profileData.SSLMode,
-				ReadOnly: true, // v1.0 is read-only only
-			}
-
-			// Save credentials to keychain
-			credStore, err := credentials.NewStore("dbridge")
-			if err != nil {
-				return fmt.Errorf("failed to open credential store: %w", err)
-			}
-
-			ctx := context.Background()
-
-			// Only save credentials if password is provided
-			// For passwordless auth (trust, peer, cert), we skip credential storage
-			if profileData.Password != "" {
-				if err := credStore.Save(ctx, profileData.Name, credentials.Credentials{
+				profile := &config.Profile{
+					Driver:   profileData.Driver,
+					Name:     profileData.Name,
+					Host:     profileData.Host,
+					Port:     profileData.Port,
+					Database: profileData.Database,
 					Username: profileData.Username,
-					Password: profileData.Password,
-				}); err != nil {
-					return fmt.Errorf("failed to save credentials: %w", err)
+					SSLMode:  profileData.SSLMode,
+					ReadOnly: true,
+				}
+
+				credStore, err := credentials.NewStore("dbridge")
+				if err != nil {
+					return fmt.Errorf("failed to open credential store: %w", err)
+				}
+
+				ctx := context.Background()
+
+				if profileData.Password != "" {
+					if err := credStore.Save(ctx, profileData.Name, credentials.Credentials{
+						Username: profileData.Username,
+						Password: profileData.Password,
+					}); err != nil {
+						return fmt.Errorf("failed to save credentials: %w", err)
+					}
+				}
+
+				cfg.AddProfile(profile)
+				if err := cfg.Save(); err != nil {
+					return fmt.Errorf("failed to save config: %w", err)
 				}
 			}
 
-			// Add profile to config
-			cfg.AddProfile(profile)
-
-			// Save config
-			if err := cfg.Save(); err != nil {
-				return fmt.Errorf("failed to save config: %w", err)
-			}
-
-			// Test connection if requested (flag-based or TUI prompt)
+			// Test connection if requested via flag
 			var connTestResult *connectionTestResult
-			if !formatter.HumanMode {
-				// JSON mode: use the flag
-				if testConnection {
-					connTestResult = runConnectionTest(ctx, profileData)
-				}
-			} else if flagMode {
-				// Human flag mode: use the flag
-				if testConnection {
-					connTestResult = runConnectionTest(ctx, profileData)
-				}
-			} else {
-				// Interactive TUI mode: prompt the user
-				var runTest bool
-				if err := huh.NewConfirm().
-					Title("Test connection?").
-					Value(&runTest).
-					WithTheme(form.CustomTheme()).
-					Run(); err != nil {
-					return fmt.Errorf("prompt failed: %w", err)
-				}
-
-				if runTest {
-					connTestResult = runConnectionTest(ctx, profileData)
-				}
+			if testConnection {
+				ctx := context.Background()
+				connTestResult = runConnectionTest(ctx, profileData)
 			}
 
 			// Output success message
@@ -303,47 +275,18 @@ Examples:
 				// Simple output for flag mode
 				fmt.Printf("✓ Profile '%s' added successfully\n", profileData.Name)
 				if profileData.Password != "" {
-					fmt.Printf("✓ Credentials stored in %s\n", credStore.Type())
+					store, _ := credentials.NewStore("dbridge")
+					if store != nil {
+						fmt.Printf("✓ Credentials stored in %s\n", store.Type())
+					}
 				} else {
 					fmt.Printf("✓ Using passwordless authentication\n")
 				}
 				if connTestResult != nil {
 					printConnectionTestResult(connTestResult)
 				}
-			} else {
-				// Enhanced success message for interactive mode
-				successStyle := lipgloss.NewStyle().
-					Foreground(lipgloss.Color("46")).
-					Bold(true)
-
-				boxStyle := lipgloss.NewStyle().
-					Border(lipgloss.RoundedBorder()).
-					BorderForeground(lipgloss.Color("46")).
-					Padding(1, 2)
-
-				authInfo := credStore.Type()
-				if profileData.Password == "" {
-					authInfo = "Passwordless (trust/peer/cert)"
-				}
-
-				message := fmt.Sprintf(
-					"%s Profile '%s' added successfully!\n\n"+
-						"Host: %s:%d\n"+
-						"Database: %s\n"+
-						"Authentication: %s",
-					successStyle.Render("✓"),
-					profileData.Name,
-					profileData.Host,
-					profileData.Port,
-					profileData.Database,
-					authInfo,
-				)
-
-				fmt.Println("\n" + boxStyle.Render(message))
-				if connTestResult != nil {
-					printConnectionTestResult(connTestResult)
-				}
 			}
+			// Interactive mode: save dialog is shown by the form itself
 
 			return nil
 		},
@@ -661,58 +604,18 @@ Examples:
 			}
 
 			// Launch form pre-filled with source profile data
-			profileData, err := form.NewProfileFormWithDefaults(
-				sourceProfile.Driver,
-				newProfileName,
-				sourceProfile.Database,
-				sourceProfile.Host,
-				sourceProfile.Port,
-				sourceProfile.Username,
-				sourceProfile.SSLMode,
-				sourcePassword, // Pre-fill password from source (may be empty)
-			)
-			if err != nil {
-				return fmt.Errorf("clone cancelled or error: %w", err)
-			}
+			_, err = form.RunProfileForm(&form.ProfileData{
+				Driver:   sourceProfile.Driver,
+				Name:     newProfileName,
+				Database: sourceProfile.Database,
+				Host:     sourceProfile.Host,
+				Port:     sourceProfile.Port,
+				Username: sourceProfile.Username,
+				SSLMode:  sourceProfile.SSLMode,
+				Password: sourcePassword,
+			}, testConnectionOption(), form.WithSave(saveProfileCallback))
 
-			// Create new profile
-			newProfile := &config.Profile{
-				Driver:   profileData.Driver,
-				Name:     profileData.Name,
-				Host:     profileData.Host,
-				Port:     profileData.Port,
-				Database: profileData.Database,
-				Username: profileData.Username,
-				SSLMode:  profileData.SSLMode,
-				ReadOnly: true,
-			}
-
-			// Save new credentials (only if password provided)
-			if profileData.Password != "" {
-				if err := credStore.Save(ctx, profileData.Name, credentials.Credentials{
-					Username: profileData.Username,
-					Password: profileData.Password,
-				}); err != nil {
-					return fmt.Errorf("failed to save credentials: %w", err)
-				}
-			}
-
-			// Add new profile to config
-			cfg.AddProfile(newProfile)
-
-			// Save config
-			if err := cfg.Save(); err != nil {
-				return fmt.Errorf("failed to save config: %w", err)
-			}
-
-			fmt.Printf("\n✓ Profile '%s' cloned from '%s'\n", profileData.Name, sourceProfileName)
-			if profileData.Password != "" {
-				fmt.Printf("✓ Credentials stored in %s\n", credStore.Type())
-			} else {
-				fmt.Printf("✓ Using passwordless authentication\n")
-			}
-
-			return nil
+			return err
 		},
 	}
 }
@@ -741,88 +644,55 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 	}
 
 	// Launch form pre-filled with existing data
-	profileData, err := form.NewProfileFormWithDefaults(
-		existingProfile.Driver,
-		existingProfile.Name,
-		existingProfile.Database,
-		existingProfile.Host,
-		existingProfile.Port,
-		existingProfile.Username,
-		existingProfile.SSLMode,
-		existingPassword, // May be empty for passwordless profiles
-	)
-	if err != nil {
-		return fmt.Errorf("edit cancelled or error: %w", err)
-	}
-
-	// Check if profile name changed
-	nameChanged := profileData.Name != profileName
-
-	if nameChanged {
-		// Remove old profile and credentials
-		_ = cfg.RemoveProfile(profileName)
-		_ = credStore.Delete(ctx, profileName)
-
-		fmt.Printf("ℹ️  Profile renamed from '%s' to '%s'\n", profileName, profileData.Name)
-	}
-
-	// Update profile
-	updatedProfile := &config.Profile{
-		Driver:   profileData.Driver,
-		Name:     profileData.Name,
-		Host:     profileData.Host,
-		Port:     profileData.Port,
-		Database: profileData.Database,
-		Username: profileData.Username,
-		SSLMode:  profileData.SSLMode,
-		ReadOnly: true,
-		Disabled: existingProfile.Disabled,
-	}
-
-	// Save updated credentials (only if password provided)
-	if profileData.Password != "" {
-		if err := credStore.Save(ctx, profileData.Name, credentials.Credentials{
-			Username: profileData.Username,
-			Password: profileData.Password,
-		}); err != nil {
-			return fmt.Errorf("failed to save credentials: %w", err)
+	editSaveFn := func(d *form.ProfileData) string {
+		nameChanged := d.Name != profileName
+		if nameChanged {
+			_ = cfg.RemoveProfile(profileName)
+			_ = credStore.Delete(ctx, profileName)
 		}
-	} else {
-		// If password is now empty, delete any existing credentials
-		_ = credStore.Delete(ctx, profileData.Name)
+
+		updatedProfile := &config.Profile{
+			Driver:   d.Driver,
+			Name:     d.Name,
+			Host:     d.Host,
+			Port:     d.Port,
+			Database: d.Database,
+			Username: d.Username,
+			SSLMode:  d.SSLMode,
+			ReadOnly: true,
+			Disabled: existingProfile.Disabled,
+		}
+
+		if d.Password != "" {
+			if err := credStore.Save(ctx, d.Name, credentials.Credentials{
+				Username: d.Username,
+				Password: d.Password,
+			}); err != nil {
+				return "failed to save credentials: " + err.Error()
+			}
+		} else {
+			_ = credStore.Delete(ctx, d.Name)
+		}
+
+		cfg.AddProfile(updatedProfile)
+		if err := cfg.Save(); err != nil {
+			return "failed to save config: " + err.Error()
+		}
+		return ""
 	}
 
-	// Add/update profile in config
-	cfg.AddProfile(updatedProfile)
+	_, err = form.RunProfileForm(&form.ProfileData{
+		Driver:   existingProfile.Driver,
+		Name:     existingProfile.Name,
+		Database: existingProfile.Database,
+		Host:     existingProfile.Host,
+		Port:     existingProfile.Port,
+		Username: existingProfile.Username,
+		SSLMode:  existingProfile.SSLMode,
+		Password: existingPassword,
+	}, testConnectionOption(), form.WithSave(editSaveFn))
 
-	// Save config
-	if err := cfg.Save(); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	fmt.Printf("\n✓ Profile '%s' updated successfully\n", profileData.Name)
-	if profileData.Password != "" {
-		fmt.Printf("✓ Credentials updated in %s\n", credStore.Type())
-	} else {
-		fmt.Printf("✓ Using passwordless authentication\n")
-	}
-
-	// Prompt to test connection
-	var runTest bool
-	if err := huh.NewConfirm().
-		Title("Test connection?").
-		Value(&runTest).
-		WithTheme(form.CustomTheme()).
-		Run(); err != nil {
-		return fmt.Errorf("prompt failed: %w", err)
-	}
-
-	if runTest {
-		result := runConnectionTest(ctx, profileData)
-		printConnectionTestResult(result)
-	}
-
-	return nil
+	return err
 }
 
 // newConfigManageCmd creates the 'config manage' command
@@ -847,135 +717,9 @@ Examples:
 					nil)
 			}
 
-			return runManageMenu(cmd)
+			return runManageTUI()
 		},
 	}
-}
-
-// runManageMenu is the main loop for the interactive manage menu
-func runManageMenu(cmd *cobra.Command) error {
-	for {
-		// Reload config each iteration to reflect changes
-		cfg, err := config.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-
-		if len(cfg.Profiles) == 0 {
-			fmt.Println("No profiles configured.")
-			fmt.Println("\nAdd a profile with: dbridge config add <name>")
-			return nil
-		}
-
-		// Step 1: Select a profile
-		profileOptions := buildProfileOptions(cfg)
-		profileOptions = append(profileOptions, huh.NewOption("← Exit", "__exit"))
-
-		var selectedProfile string
-		err = huh.NewSelect[string]().
-			Title("Select a profile to manage").
-			Options(profileOptions...).
-			Value(&selectedProfile).
-			WithTheme(form.CustomTheme()).
-			Run()
-		if err != nil {
-			return nil // User cancelled
-		}
-
-		if selectedProfile == "__exit" {
-			return nil // Exit
-		}
-
-		// Step 2: Select an action
-		profile, err := cfg.GetProfile(selectedProfile)
-		if err != nil {
-			return fmt.Errorf("profile not found: %w", err)
-		}
-
-		action, err := selectProfileAction(profile)
-		if err != nil || action == "back" {
-			continue // Back to profile list
-		}
-
-		// Step 3: Execute action
-		switch action {
-		case "edit":
-			if err := runEditFlow(cfg, selectedProfile); err != nil {
-				return err
-			}
-		case "toggle":
-			if err := toggleProfile(cfg, selectedProfile); err != nil {
-				return err
-			}
-			if profile.Disabled {
-				fmt.Printf("✓ Profile '%s' disabled\n\n", selectedProfile)
-			} else {
-				fmt.Printf("✓ Profile '%s' enabled\n\n", selectedProfile)
-			}
-		case "delete":
-			ctx := context.Background()
-			deleted, err := deleteProfileConfirm(ctx, cfg, selectedProfile)
-			if err != nil {
-				return err
-			}
-			if deleted {
-				fmt.Printf("✓ Profile '%s' deleted\n\n", selectedProfile)
-			}
-		}
-	}
-}
-
-// buildProfileOptions builds huh select options for all profiles
-func buildProfileOptions(cfg *config.Config) []huh.Option[string] {
-	names := make([]string, 0, len(cfg.Profiles))
-	for name := range cfg.Profiles {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	options := make([]huh.Option[string], 0, len(names))
-	for _, name := range names {
-		profile := cfg.Profiles[name]
-		icon := "✓"
-		status := "enabled"
-		if profile.Disabled {
-			icon = "✗"
-			status = "disabled"
-		}
-		driverTag := profile.Driver
-		if driverTag == "" {
-			driverTag = "postgres"
-		}
-		label := fmt.Sprintf("%s %s - %s:%d/%s [%s] (%s)",
-			icon, name, profile.Host, profile.Port, profile.Database, driverTag, status)
-		options = append(options, huh.NewOption(label, name))
-	}
-	return options
-}
-
-// selectProfileAction shows the action menu for a profile
-func selectProfileAction(profile *config.Profile) (string, error) {
-	toggleLabel := "Disable profile"
-	if profile.Disabled {
-		toggleLabel = "Enable profile"
-	}
-
-	var action string
-	err := huh.NewSelect[string]().
-		Title(fmt.Sprintf("Action for '%s'", profile.Name)).
-		Options(
-			huh.NewOption("← Back to profile list", "back"),
-			huh.NewOption("Edit profile", "edit"),
-			huh.NewOption(toggleLabel, "toggle"),
-			huh.NewOption("Delete profile", "delete"),
-		).
-		Value(&action).
-		WithTheme(form.CustomTheme()).
-		Run()
-	if err != nil {
-		return "back", err
-	}
-	return action, nil
 }
 
 // toggleProfile flips the Disabled state and saves
@@ -983,34 +727,6 @@ func toggleProfile(cfg *config.Config, name string) error {
 	profile := cfg.Profiles[name]
 	profile.Disabled = !profile.Disabled
 	return cfg.Save()
-}
-
-// deleteProfileConfirm confirms and deletes a profile and its credentials
-func deleteProfileConfirm(ctx context.Context, cfg *config.Config, name string) (bool, error) {
-	var confirm bool
-	err := huh.NewConfirm().
-		Title(fmt.Sprintf("Delete profile '%s'? This cannot be undone.", name)).
-		Affirmative("Delete").
-		Negative("Cancel").
-		Value(&confirm).
-		WithTheme(form.CustomTheme()).
-		Run()
-	if err != nil || !confirm {
-		return false, nil
-	}
-
-	// Delete credentials
-	credStore, err := credentials.NewStore("dbridge")
-	if err == nil {
-		_ = credStore.Delete(ctx, name)
-	}
-
-	// Remove profile
-	if err := cfg.RemoveProfile(name); err != nil {
-		return false, fmt.Errorf("failed to remove profile: %w", err)
-	}
-
-	return true, cfg.Save()
 }
 
 // connectionTestResult holds the outcome of a connection test
@@ -1030,6 +746,17 @@ func (r *connectionTestResult) toMap() map[string]interface{} {
 	return m
 }
 
+// testConnectionOption returns a FormOption that adds inline connection testing via ctrl+t.
+func testConnectionOption() form.FormOption {
+	return form.WithTestConnection(func(d *form.ProfileData) string {
+		result := runConnectionTest(context.Background(), d)
+		if result.Success {
+			return ""
+		}
+		return result.Error
+	})
+}
+
 // runConnectionTest tests a database connection using the given profile data
 func runConnectionTest(ctx context.Context, data *form.ProfileData) *connectionTestResult {
 	connConfig := &dbpkg.ConnectionConfig{
@@ -1044,10 +771,58 @@ func runConnectionTest(ctx context.Context, data *form.ProfileData) *connectionT
 	}
 	conn, err := dbpkg.NewConnection(ctx, connConfig)
 	if err != nil {
-		return &connectionTestResult{Success: false, Error: err.Error()}
+		return &connectionTestResult{Success: false, Error: simplifyConnError(err)}
 	}
 	conn.Close(ctx)
 	return &connectionTestResult{Success: true}
+}
+
+// simplifyConnError extracts the root cause from verbose driver errors.
+func simplifyConnError(err error) string {
+	msg := err.Error()
+
+	// Match common error patterns across PostgreSQL and MySQL drivers
+	lower := strings.ToLower(msg)
+
+	if strings.Contains(lower, "connection refused") {
+		return "connection refused"
+	}
+	if strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out") {
+		return "connection timed out"
+	}
+	if strings.Contains(lower, "password authentication failed") || strings.Contains(lower, "access denied") {
+		return "authentication failed (check username/password)"
+	}
+	if strings.Contains(lower, "does not exist") || strings.Contains(lower, "unknown database") {
+		if strings.Contains(lower, "role") || strings.Contains(lower, "user") {
+			return "user does not exist"
+		}
+		return "database does not exist"
+	}
+	if strings.Contains(lower, "no pg_hba.conf entry") {
+		return "connection rejected by server (check pg_hba.conf)"
+	}
+	if strings.Contains(lower, "too many connections") {
+		return "too many connections"
+	}
+	if strings.Contains(lower, "ssl") || strings.Contains(lower, "tls") {
+		return "SSL/TLS error: " + lastLine(msg)
+	}
+
+	// Fallback: last meaningful line (usually the root cause)
+	return lastLine(msg)
+}
+
+func lastLine(s string) string {
+	s = strings.TrimSpace(s)
+	lines := strings.Split(s, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line != "" {
+			return line
+		}
+	}
+	return s
 }
 
 // printConnectionTestResult prints the connection test result for human-readable output
