@@ -11,7 +11,7 @@
 build: ## Build dbridge binary
 	@echo "Building dbridge..."
 	@mkdir -p bin
-	go build -o bin/dbridge ./cmd/dbridge
+	go build -ldflags "-X main.version=dev -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/dbridge ./cmd/dbridge
 	@echo "✓ Binary created at bin/dbridge"
 
 .PHONY: run

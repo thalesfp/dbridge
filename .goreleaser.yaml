@@ -1,0 +1,27 @@
+version: 2
+
+builds:
+  - main: ./cmd/dbridge
+    binary: dbridge
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+
+brews:
+  - repository:
+      owner: thalesfp
+      name: homebrew-dbridge
+    homepage: https://github.com/thalesfp/dbridge
+    description: Multi-database CLI and MCP server for AI agents
+    license: MIT
