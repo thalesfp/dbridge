@@ -13,6 +13,13 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew tap thalesfp/dbridge
+brew install dbridge
+```
+
 ### From Source
 
 ```bash
