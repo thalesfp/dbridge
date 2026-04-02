@@ -4,7 +4,7 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 
 ## Features
 
-- **Multi-Database Support**: PostgreSQL (more databases planned)
+- **Multi-Database Support**: PostgreSQL, MySQL
 - **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) — passwords never stored in config files or logs
 - **Multi-Profile Management**: Manage multiple database connections with named profiles
 - **Multiple Output Formats**: Compact JSON (token-efficient for AI agents), table, and CSV
@@ -25,18 +25,21 @@ make build
 ### Make Commands
 
 ```bash
-make build          # Build binary
-make test           # Run tests
-make test-coverage  # Generate coverage report
-make db-setup       # Setup test database
-make clean          # Remove build artifacts
-make help           # Show all commands
+make build            # Build binary
+make test             # Run unit tests
+make test-integration # Run integration tests (requires make docker-up)
+make test-coverage    # Generate coverage report
+make lint             # Run golangci-lint
+make fmt              # Format code
+make docker-up        # Start test database containers
+make docker-down      # Stop test database containers
+make clean            # Remove build artifacts
 ```
 
 ### Dependencies
 
-- Go 1.25+
-- PostgreSQL 12+ (for PostgreSQL connections)
+- Go 1.24+
+- PostgreSQL 12+ and/or MySQL 8.0+ (depending on which databases you connect to)
 
 ## Quick Start
 
