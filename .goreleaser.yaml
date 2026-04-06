@@ -1,15 +1,29 @@
 version: 2
 
 builds:
-  - main: ./cmd/dbridge
+  - id: dbridge-darwin
+    main: ./cmd/dbridge
     binary: dbridge
-    ldflags:
+    ldflags: &ldflags
       - -s -w
       - -X main.version={{.Version}}
       - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
+    env:
+      - CGO_ENABLED=1
     goos:
       - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: dbridge-linux
+    main: ./cmd/dbridge
+    binary: dbridge
+    ldflags: *ldflags
+    env:
+      - CGO_ENABLED=0
+    goos:
       - linux
     goarch:
       - amd64
