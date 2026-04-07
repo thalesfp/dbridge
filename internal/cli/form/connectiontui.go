@@ -73,26 +73,26 @@ type formField struct {
 	validate func(string) error
 }
 
-// FormOption configures the profile form.
-type FormOption func(*profileFormModel)
+// FormOption configures the connection form.
+type FormOption func(*connectionFormModel)
 
 // WithTestConnection adds a "test connection" keybind (ctrl+t) to the form.
 // The callback receives current field values and returns "" on success or an error message.
-func WithTestConnection(fn func(*ProfileData) string) FormOption {
-	return func(m *profileFormModel) {
+func WithTestConnection(fn func(*ConnectionData) string) FormOption {
+	return func(m *connectionFormModel) {
 		m.testFn = fn
 	}
 }
 
-// WithSave adds an in-form save callback. On submit, the form calls fn with the profile data.
+// WithSave adds an in-form save callback. On submit, the form calls fn with the connection data.
 // Returns "" on success or an error message. The result is shown as a dialog before the form exits.
-func WithSave(fn func(*ProfileData) string) FormOption {
-	return func(m *profileFormModel) {
+func WithSave(fn func(*ConnectionData) string) FormOption {
+	return func(m *connectionFormModel) {
 		m.saveFn = fn
 	}
 }
 
-type profileFormModel struct {
+type connectionFormModel struct {
 	fields     []formField
 	focusIndex int
 	err        string
@@ -109,8 +109,8 @@ type profileFormModel struct {
 	origPw     string
 
 	// Callbacks
-	testFn func(*ProfileData) string
-	saveFn func(*ProfileData) string
+	testFn func(*ConnectionData) string
+	saveFn func(*ConnectionData) string
 
 	// Dialog overlay
 	dialogMsg string // non-empty = show centered dialog
@@ -118,7 +118,7 @@ type profileFormModel struct {
 	saved     bool   // true = dismiss dialog should quit
 
 	editMode bool
-	defaults *ProfileData
+	defaults *ConnectionData
 	width    int
 	height   int
 }
@@ -143,9 +143,9 @@ func newPasswordInput(placeholder string, value string) textinput.Model {
 	return ti
 }
 
-func newProfileFormModel(initial *ProfileData) profileFormModel {
+func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 	// Start with creation defaults
-	data := &ProfileData{
+	data := &ConnectionData{
 		Driver:  "postgres",
 		Host:    "localhost",
 		Port:    5432,
@@ -197,7 +197,7 @@ func newProfileFormModel(initial *ProfileData) profileFormModel {
 		{kind: fieldSelect, label: "Driver", options: []selectOption{
 			{"PostgreSQL", "postgres"}, {"MySQL", "mysql"},
 		}, selected: driverIdx},
-		{kind: fieldText, label: "Name", input: newTextInput("production-db", data.Name), validate: validateProfileName},
+		{kind: fieldText, label: "Name", input: newTextInput("production-db", data.Name), validate: validateConnectionName},
 		{kind: fieldText, label: "Database", input: newTextInput("myapp", data.Database), validate: validateNotEmpty("Database")},
 		{kind: fieldText, label: "Host", input: newTextInput("localhost", data.Host), validate: validateNotEmpty("Host")},
 		{kind: fieldText, label: "Port", input: newTextInput("5432", portStr), validate: validatePort},
@@ -219,7 +219,7 @@ func newProfileFormModel(initial *ProfileData) profileFormModel {
 		})
 	}
 
-	return profileFormModel{
+	return connectionFormModel{
 		fields:     fields,
 		focusIndex: 0,
 		password:   data.Password,
@@ -229,11 +229,11 @@ func newProfileFormModel(initial *ProfileData) profileFormModel {
 	}
 }
 
-func (m profileFormModel) Init() tea.Cmd {
+func (m connectionFormModel) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (m profileFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m connectionFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -271,7 +271,7 @@ func (m profileFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m profileFormModel) forwardToPwInput(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m connectionFormModel) forwardToPwInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.pwFocus == 0 {
 		var cmd tea.Cmd
 		m.pwInput, cmd = m.pwInput.Update(msg)
@@ -282,7 +282,7 @@ func (m profileFormModel) forwardToPwInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m profileFormModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m connectionFormModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
 		m.cancelled = true
@@ -334,7 +334,7 @@ func (m profileFormModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+t":
 		if m.testFn != nil {
-			data := m.toProfileData()
+			data := m.toConnectionData()
 			result := m.testFn(data)
 			if result == "" {
 				m.dialogMsg = "✓ Connection successful"
@@ -353,10 +353,10 @@ func (m profileFormModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.saveFn != nil {
-			data := m.toProfileData()
+			data := m.toConnectionData()
 			result := m.saveFn(data)
 			if result == "" {
-				m.dialogMsg = fmt.Sprintf("✓ Profile '%s' saved", data.Name)
+				m.dialogMsg = fmt.Sprintf("✓ Connection '%s' saved", data.Name)
 				m.dialogOk = true
 				m.saved = true
 			} else {
@@ -380,7 +380,7 @@ func (m profileFormModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *profileFormModel) enterPasswordScreen() {
+func (m *connectionFormModel) enterPasswordScreen() {
 	m.editingPw = true
 	m.pwInput = newPasswordInput("password", "")
 	m.pwConfirm = newPasswordInput("confirm password", "")
@@ -390,7 +390,7 @@ func (m *profileFormModel) enterPasswordScreen() {
 	m.err = ""
 }
 
-func (m profileFormModel) updatePassword(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m connectionFormModel) updatePassword(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
 		m.cancelled = true
@@ -451,21 +451,21 @@ func (m profileFormModel) updatePassword(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.forwardToPwInput(msg)
 }
 
-func (m *profileFormModel) focusField(idx int) {
+func (m *connectionFormModel) focusField(idx int) {
 	f := &m.fields[idx]
 	if f.kind == fieldText {
 		f.input.Focus()
 	}
 }
 
-func (m *profileFormModel) blurField(idx int) {
+func (m *connectionFormModel) blurField(idx int) {
 	f := &m.fields[idx]
 	if f.kind == fieldText {
 		f.input.Blur()
 	}
 }
 
-func (m profileFormModel) validateAll() string {
+func (m connectionFormModel) validateAll() string {
 	for i := range m.fields {
 		f := &m.fields[i]
 		if f.validate != nil && f.kind == fieldText {
@@ -477,7 +477,7 @@ func (m profileFormModel) validateAll() string {
 	return ""
 }
 
-func (m profileFormModel) View() string {
+func (m connectionFormModel) View() string {
 	if m.submitted || m.cancelled {
 		return ""
 	}
@@ -513,12 +513,12 @@ func (m profileFormModel) View() string {
 	return m.viewMain()
 }
 
-func (m profileFormModel) viewMain() string {
+func (m connectionFormModel) viewMain() string {
 	var b strings.Builder
 
-	title := "Add Profile"
+	title := "Add Connection"
 	if m.editMode {
-		title = "Edit Profile"
+		title = "Edit Connection"
 	}
 	b.WriteString(fmt.Sprintf("\n  %s\n\n", formTitleStyle.Render(title)))
 
@@ -571,7 +571,7 @@ func (m profileFormModel) viewMain() string {
 	return b.String()
 }
 
-func (m profileFormModel) viewPassword() string {
+func (m connectionFormModel) viewPassword() string {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("\n  %s\n\n", formTitleStyle.Render("Change Password")))
@@ -609,7 +609,7 @@ func (m profileFormModel) viewPassword() string {
 	return b.String()
 }
 
-func (m profileFormModel) renderSelect(f *formField, active bool) string {
+func (m connectionFormModel) renderSelect(f *formField, active bool) string {
 	parts := make([]string, 0, len(f.options))
 	for i, opt := range f.options {
 		if i == f.selected {
@@ -625,7 +625,7 @@ func (m profileFormModel) renderSelect(f *formField, active bool) string {
 	return strings.Join(parts, "  ")
 }
 
-func (m profileFormModel) toProfileData() *ProfileData {
+func (m connectionFormModel) toConnectionData() *ConnectionData {
 	port, _ := strconv.Atoi(m.fields[fPort].input.Value())
 
 	driver := m.fields[fDriver].options[m.fields[fDriver].selected].value
@@ -637,7 +637,7 @@ func (m profileFormModel) toProfileData() *ProfileData {
 		pw = m.fields[fSSLMode+1].input.Value()
 	}
 
-	data := &ProfileData{
+	data := &ConnectionData{
 		Driver:   driver,
 		Name:     m.fields[fName].input.Value(),
 		Database: m.fields[fDatabase].input.Value(),
@@ -671,10 +671,10 @@ func (m profileFormModel) toProfileData() *ProfileData {
 	return data
 }
 
-// RunProfileForm runs the interactive profile form.
-// Pass nil for creation mode, or a ProfileData for edit/clone mode.
-func RunProfileForm(initial *ProfileData, opts ...FormOption) (*ProfileData, error) {
-	m := newProfileFormModel(initial)
+// RunConnectionForm runs the interactive connection form.
+// Pass nil for creation mode, or a ConnectionData for edit/clone mode.
+func RunConnectionForm(initial *ConnectionData, opts ...FormOption) (*ConnectionData, error) {
+	m := newConnectionFormModel(initial)
 	for _, opt := range opts {
 		opt(&m)
 	}
@@ -684,10 +684,10 @@ func RunProfileForm(initial *ProfileData, opts ...FormOption) (*ProfileData, err
 		return nil, err
 	}
 
-	result := final.(profileFormModel)
+	result := final.(connectionFormModel)
 	if result.cancelled {
 		return nil, fmt.Errorf("form cancelled")
 	}
 
-	return result.toProfileData(), nil
+	return result.toConnectionData(), nil
 }

@@ -27,52 +27,52 @@ var (
 	manageDialogHint  = lipgloss.NewStyle().Foreground(ColorDim)
 )
 
-type profileItem struct {
-	name    string
-	profile *config.Profile
+type connectionItem struct {
+	name string
+	conn *config.Connection
 }
 
 type clearStatusMsg struct{}
 
 type manageModel struct {
-	profiles    []profileItem
-	cursor      int
-	maxName     int
-	cfg         *config.Config
-	confirming  bool
-	confirmName string
-	statusMsg   string
-	quitting    bool
-	editProfile string
-	addProfile  bool
-	width       int
-	height      int
+	connections    []connectionItem
+	cursor         int
+	maxName        int
+	cfg            *config.Config
+	confirming     bool
+	confirmName    string
+	statusMsg      string
+	quitting       bool
+	editConnection string
+	addConnection  bool
+	width          int
+	height         int
 }
 
 func newManageModel(cfg *config.Config) manageModel {
 	m := manageModel{cfg: cfg}
-	m.loadProfiles()
+	m.loadConnections()
 	return m
 }
 
-func (m *manageModel) loadProfiles() {
-	names := make([]string, 0, len(m.cfg.Profiles))
-	for name := range m.cfg.Profiles {
+func (m *manageModel) loadConnections() {
+	names := make([]string, 0, len(m.cfg.Connections))
+	for name := range m.cfg.Connections {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
-	m.profiles = make([]profileItem, len(names))
+	m.connections = make([]connectionItem, len(names))
 	m.maxName = 0
 	for i, name := range names {
-		m.profiles[i] = profileItem{name: name, profile: m.cfg.Profiles[name]}
+		m.connections[i] = connectionItem{name: name, conn: m.cfg.Connections[name]}
 		if len(name) > m.maxName {
 			m.maxName = len(name)
 		}
 	}
 
-	if m.cursor >= len(m.profiles) {
-		m.cursor = max(0, len(m.profiles)-1)
+	if m.cursor >= len(m.connections) {
+		m.cursor = max(0, len(m.connections)-1)
 	}
 }
 
@@ -82,7 +82,7 @@ func (m *manageModel) reloadFromDisk() error {
 		return err
 	}
 	m.cfg = cfg
-	m.loadProfiles()
+	m.loadConnections()
 	return nil
 }
 
@@ -123,17 +123,17 @@ func (m manageModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "down", "j":
-		if m.cursor < len(m.profiles)-1 {
+		if m.cursor < len(m.connections)-1 {
 			m.cursor++
 		}
 
 	case "t":
-		if len(m.profiles) == 0 {
+		if len(m.connections) == 0 {
 			return m, nil
 		}
-		name := m.profiles[m.cursor].name
-		wasDisabled := m.profiles[m.cursor].profile.Disabled
-		if err := toggleProfile(m.cfg, name); err != nil {
+		name := m.connections[m.cursor].name
+		wasDisabled := m.connections[m.cursor].conn.Disabled
+		if err := toggleConnection(m.cfg, name); err != nil {
 			m.statusMsg = "Error: " + err.Error()
 			return m, clearStatusAfter(2 * time.Second)
 		}
@@ -146,21 +146,21 @@ func (m manageModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, clearStatusAfter(2 * time.Second)
 
 	case "d":
-		if len(m.profiles) == 0 {
+		if len(m.connections) == 0 {
 			return m, nil
 		}
 		m.confirming = true
-		m.confirmName = m.profiles[m.cursor].name
+		m.confirmName = m.connections[m.cursor].name
 
 	case "e":
-		if len(m.profiles) == 0 {
+		if len(m.connections) == 0 {
 			return m, nil
 		}
-		m.editProfile = m.profiles[m.cursor].name
+		m.editConnection = m.connections[m.cursor].name
 		return m, tea.Quit
 
 	case "a":
-		m.addProfile = true
+		m.addConnection = true
 		return m, tea.Quit
 	}
 
@@ -170,7 +170,7 @@ func (m manageModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m manageModel) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y":
-		if err := deleteProfile(m.cfg, m.confirmName); err != nil {
+		if err := deleteConnection(m.cfg, m.confirmName); err != nil {
 			m.statusMsg = "Error: " + err.Error()
 		} else {
 			m.statusMsg = fmt.Sprintf("✓ '%s' deleted", m.confirmName)
@@ -194,12 +194,12 @@ func (m manageModel) View() string {
 		return ""
 	}
 
-	if len(m.profiles) == 0 {
+	if len(m.connections) == 0 {
 		var b strings.Builder
 		b.WriteString("\n")
-		b.WriteString(TitleStyle.Render("  Manage Profiles"))
+		b.WriteString(TitleStyle.Render("  Manage Connections"))
 		b.WriteString("\n\n")
-		b.WriteString("  " + HelpStyle.Render("No profiles configured."))
+		b.WriteString("  " + HelpStyle.Render("No connections configured."))
 		b.WriteString("\n\n")
 		b.WriteString("  " + HelpStyle.Render("a add · esc quit"))
 		b.WriteString("\n")
@@ -213,25 +213,25 @@ func (m manageModel) View() string {
 	var b strings.Builder
 
 	b.WriteString("\n")
-	b.WriteString(TitleStyle.Render("  Manage Profiles"))
+	b.WriteString(TitleStyle.Render("  Manage Connections"))
 	b.WriteString("\n\n")
 
-	for i, item := range m.profiles {
+	for i, item := range m.connections {
 		cursor := "  "
 		if i == m.cursor {
 			cursor = CursorStyle.Render("▸ ")
 		}
 
 		icon := manageEnabledStyle.Render("✓")
-		if item.profile.Disabled {
+		if item.conn.Disabled {
 			icon = manageDisabledStyle.Render("✗")
 		}
 
 		name := manageNameStyle.Render(fmt.Sprintf("%-*s", m.maxName, item.name))
-		driver := HelpStyle.Render(driverShort(item.profile.Driver))
-		conn := HelpStyle.Render(fmt.Sprintf("%s:%d/%s", item.profile.Host, item.profile.Port, item.profile.Database))
+		driver := HelpStyle.Render(driverShort(item.conn.Driver))
+		connStr := HelpStyle.Render(fmt.Sprintf("%s:%d/%s", item.conn.Host, item.conn.Port, item.conn.Database))
 
-		b.WriteString(fmt.Sprintf("  %s%s %s  %s  %s\n", cursor, icon, name, driver, conn))
+		b.WriteString(fmt.Sprintf("  %s%s %s  %s  %s\n", cursor, icon, name, driver, connStr))
 	}
 
 	b.WriteString("\n")
@@ -279,30 +279,30 @@ func driverShort(driver string) string {
 	}
 }
 
-func deleteProfile(cfg *config.Config, name string) error {
+func deleteConnection(cfg *config.Config, name string) error {
 	ctx := context.Background()
 	credStore, err := credentials.NewStore("dbridge")
 	if err == nil {
 		_ = credStore.Delete(ctx, name)
 	}
-	if err := cfg.RemoveProfile(name); err != nil {
-		return fmt.Errorf("failed to remove profile: %w", err)
+	if err := cfg.RemoveConnection(name); err != nil {
+		return fmt.Errorf("failed to remove connection: %w", err)
 	}
 	return cfg.Save()
 }
 
 func runAddFlow() error {
-	_, err := form.RunProfileForm(nil, testConnectionOption(), form.WithSave(saveProfileCallback))
+	_, err := form.RunConnectionForm(nil, testConnectionOption(), form.WithSave(saveConnectionCallback))
 	return err
 }
 
-func saveProfileCallback(d *form.ProfileData) string {
+func saveConnectionCallback(d *form.ConnectionData) string {
 	cfg, err := config.Load()
 	if err != nil {
 		return "failed to load config: " + err.Error()
 	}
 
-	profile := &config.Profile{
+	conn := &config.Connection{
 		Driver:   d.Driver,
 		Name:     d.Name,
 		Host:     d.Host,
@@ -326,7 +326,7 @@ func saveProfileCallback(d *form.ProfileData) string {
 		}
 	}
 
-	cfg.AddProfile(profile)
+	cfg.AddConnection(conn)
 	if err := cfg.Save(); err != nil {
 		return "failed to save config: " + err.Error()
 	}
@@ -358,7 +358,7 @@ func runManageTUI() error {
 			return nil
 		}
 
-		if result.addProfile {
+		if result.addConnection {
 			if err := runAddFlow(); err != nil {
 				fmt.Printf("\n  Error: %s\n", err)
 			}
@@ -366,8 +366,8 @@ func runManageTUI() error {
 			continue
 		}
 
-		if result.editProfile != "" {
-			if err := runEditFlow(cfg, result.editProfile); err != nil {
+		if result.editConnection != "" {
+			if err := runEditFlow(cfg, result.editConnection); err != nil {
 				fmt.Printf("\n  Error: %s\n", err)
 			}
 			fmt.Println()

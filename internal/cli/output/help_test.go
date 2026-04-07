@@ -15,7 +15,7 @@ func TestFormatHelpJSON_RootWithSubcommands(t *testing.T) {
 	}
 	sub1 := &cobra.Command{
 		Use:   "config",
-		Short: "Manage connection profiles",
+		Short: "Manage database connections",
 		RunE:  func(cmd *cobra.Command, args []string) error { return nil },
 	}
 	sub2 := &cobra.Command{
@@ -85,13 +85,13 @@ func TestFormatHelpJSON_LeafWithFlags(t *testing.T) {
 
 	config := &cobra.Command{
 		Use:   "config",
-		Short: "Manage connection profiles",
+		Short: "Manage database connections",
 	}
 	root.AddCommand(config)
 
 	add := &cobra.Command{
-		Use:   "add [profile-name]",
-		Short: "Add a new connection profile",
+		Use:   "add [connection-name]",
+		Short: "Add a new database connection",
 	}
 	add.Flags().String("host", "localhost", "Database host")
 	add.Flags().Int("port", 5432, "Database port")

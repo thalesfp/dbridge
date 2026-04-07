@@ -6,8 +6,8 @@ import (
 	"strconv"
 )
 
-// ProfileData holds the form input values
-type ProfileData struct {
+// ConnectionData holds the form input values
+type ConnectionData struct {
 	Driver   string
 	Name     string
 	Database string
@@ -20,13 +20,13 @@ type ProfileData struct {
 
 // Validation functions
 
-var profileNameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+var connectionNameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
-func validateProfileName(s string) error {
+func validateConnectionName(s string) error {
 	if len(s) == 0 {
-		return fmt.Errorf("profile name cannot be empty")
+		return fmt.Errorf("connection name cannot be empty")
 	}
-	if !profileNameRe.MatchString(s) {
+	if !connectionNameRe.MatchString(s) {
 		return fmt.Errorf("only alphanumeric characters, dashes, and underscores allowed")
 	}
 	return nil

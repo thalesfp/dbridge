@@ -25,8 +25,15 @@ const HumanOutputKey ContextKey = "human_output"
 func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Manage database connection profiles",
-		Long:  "Add, edit, remove, and list database connection profiles",
+		Short: "Manage database connections",
+		Long:  "Add, edit, remove, and list database connections",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			formatter := getFormatter(cmd)
+			if formatter.HumanMode {
+				return runManageTUI()
+			}
+			return cmd.Help()
+		},
 	}
 
 	cmd.AddCommand(newConfigAddCmd())
@@ -34,7 +41,10 @@ func NewConfigCmd() *cobra.Command {
 	cmd.AddCommand(newConfigShowCmd())
 	cmd.AddCommand(newConfigRemoveCmd())
 	cmd.AddCommand(newConfigCloneCmd())
-	cmd.AddCommand(newConfigManageCmd())
+
+	manageCmd := newConfigManageCmd()
+	manageCmd.Hidden = true
+	cmd.AddCommand(manageCmd)
 
 	return cmd
 }
@@ -54,9 +64,9 @@ func newConfigAddCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "add [profile-name]",
-		Short: "Add a new connection profile",
-		Long: `Add a new database connection profile.
+		Use:   "add [connection-name]",
+		Short: "Add a new connection",
+		Long: `Add a new database connection.
 
 By default, launches an interactive form with visual validation and progress tracking.
 You can also use flags for non-interactive/scripted usage.
@@ -95,15 +105,15 @@ Examples:
 					nil)
 			}
 
-			var profileData *form.ProfileData
+			var connData *form.ConnectionData
 			var err error
 
 			if flagMode {
 				// Flag-based mode: Use provided flags
 				if len(args) == 0 {
-					return fmt.Errorf("profile name is required when using flags")
+					return fmt.Errorf("connection name is required when using flags")
 				}
-				profileName := args[0]
+				connName := args[0]
 
 				// Validate required fields
 				if driver == "" {
@@ -168,9 +178,9 @@ Examples:
 					}
 				}
 
-				profileData = &form.ProfileData{
+				connData = &form.ConnectionData{
 					Driver:   driver,
-					Name:     profileName,
+					Name:     connName,
 					Host:     host,
 					Port:     port,
 					Database: database,
@@ -185,8 +195,8 @@ Examples:
 					initialName = args[0]
 				}
 
-				initial := &form.ProfileData{Name: initialName}
-				profileData, err = form.RunProfileForm(initial, testConnectionOption(), form.WithSave(saveProfileCallback))
+				initial := &form.ConnectionData{Name: initialName}
+				connData, err = form.RunConnectionForm(initial, testConnectionOption(), form.WithSave(saveConnectionCallback))
 				if err != nil {
 					return fmt.Errorf("form cancelled or error: %w", err)
 				}
@@ -199,14 +209,14 @@ Examples:
 					return fmt.Errorf("failed to load config: %w", err)
 				}
 
-				profile := &config.Profile{
-					Driver:   profileData.Driver,
-					Name:     profileData.Name,
-					Host:     profileData.Host,
-					Port:     profileData.Port,
-					Database: profileData.Database,
-					Username: profileData.Username,
-					SSLMode:  profileData.SSLMode,
+				connCfg := &config.Connection{
+					Driver:   connData.Driver,
+					Name:     connData.Name,
+					Host:     connData.Host,
+					Port:     connData.Port,
+					Database: connData.Database,
+					Username: connData.Username,
+					SSLMode:  connData.SSLMode,
 					ReadOnly: true,
 				}
 
@@ -217,16 +227,16 @@ Examples:
 
 				ctx := context.Background()
 
-				if profileData.Password != "" {
-					if err := credStore.Save(ctx, profileData.Name, credentials.Credentials{
-						Username: profileData.Username,
-						Password: profileData.Password,
+				if connData.Password != "" {
+					if err := credStore.Save(ctx, connData.Name, credentials.Credentials{
+						Username: connData.Username,
+						Password: connData.Password,
 					}); err != nil {
 						return fmt.Errorf("failed to save credentials: %w", err)
 					}
 				}
 
-				cfg.AddProfile(profile)
+				cfg.AddConnection(connCfg)
 				if err := cfg.Save(); err != nil {
 					return fmt.Errorf("failed to save config: %w", err)
 				}
@@ -236,14 +246,14 @@ Examples:
 			var connTestResult *connectionTestResult
 			if testConnection {
 				ctx := context.Background()
-				connTestResult = runConnectionTest(ctx, profileData)
+				connTestResult = runConnectionTest(ctx, connData)
 			}
 
 			// Output success message
 			if !formatter.HumanMode {
 				// JSON output
 				credStore := "none"
-				if profileData.Password != "" {
+				if connData.Password != "" {
 					store, _ := credentials.NewStore("dbridge")
 					if store != nil {
 						credStore = store.Type()
@@ -251,17 +261,17 @@ Examples:
 				}
 
 				data := map[string]interface{}{
-					"profile": map[string]interface{}{
-						"driver":    profileData.Driver,
-						"name":      profileData.Name,
-						"host":      profileData.Host,
-						"port":      profileData.Port,
-						"database":  profileData.Database,
-						"username":  profileData.Username,
-						"ssl_mode":  profileData.SSLMode,
+					"connection": map[string]interface{}{
+						"driver":    connData.Driver,
+						"name":      connData.Name,
+						"host":      connData.Host,
+						"port":      connData.Port,
+						"database":  connData.Database,
+						"username":  connData.Username,
+						"ssl_mode":  connData.SSLMode,
 						"read_only": true,
 					},
-					"credentials_stored": profileData.Password != "",
+					"credentials_stored": connData.Password != "",
 					"credential_store":   credStore,
 				}
 
@@ -269,12 +279,12 @@ Examples:
 					data["connection_test"] = connTestResult.toMap()
 				}
 
-				msg := fmt.Sprintf("Profile '%s' added successfully", profileData.Name)
+				msg := fmt.Sprintf("Connection '%s' added successfully", connData.Name)
 				return formatter.Success("config_add", data, msg)
 			} else if flagMode {
 				// Simple output for flag mode
-				fmt.Printf("✓ Profile '%s' added successfully\n", profileData.Name)
-				if profileData.Password != "" {
+				fmt.Printf("✓ Connection '%s' added successfully\n", connData.Name)
+				if connData.Password != "" {
 					store, _ := credentials.NewStore("dbridge")
 					if store != nil {
 						fmt.Printf("✓ Credentials stored in %s\n", store.Type())
@@ -301,7 +311,7 @@ Examples:
 	cmd.Flags().StringVar(&password, "password", "", "Database password (optional, will prompt if not provided)")
 	cmd.Flags().StringVar(&sslMode, "ssl-mode", "", "SSL mode (default: driver-specific)")
 	cmd.Flags().BoolVar(&readOnly, "readonly", true, "Read-only mode")
-	cmd.Flags().BoolVar(&testConnection, "test-connection", false, "Test the database connection after adding the profile")
+	cmd.Flags().BoolVar(&testConnection, "test-connection", false, "Test the database connection after adding")
 
 	return cmd
 }
@@ -337,20 +347,12 @@ func formatError(cmd *cobra.Command, code, message string, details interface{}) 
 	return fmt.Errorf("%s", message)
 }
 
-// getProfileNames returns a list of all profile names from config
-func getProfileNames(cfg *config.Config) []string {
-	names := make([]string, 0, len(cfg.Profiles))
-	for name := range cfg.Profiles {
-		names = append(names, name)
-	}
-	return names
-}
 
 // newConfigListCmd creates the 'config list' command
 func newConfigListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List all connection profiles",
+		Short: "List all connections",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			formatter := getFormatter(cmd)
 
@@ -359,62 +361,62 @@ func newConfigListCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if len(cfg.Profiles) == 0 {
+			if len(cfg.Connections) == 0 {
 				if !formatter.HumanMode {
 					return formatter.Success("config_list", map[string]interface{}{
-						"profiles":    []interface{}{},
+						"connections": []interface{}{},
 						"total_count": 0,
-					}, "No profiles configured")
+					}, "No connections configured")
 				}
 
-				fmt.Println("No profiles configured")
-				fmt.Println("\nAdd a profile with: dbridge config add <name>")
+				fmt.Println("No connections configured")
+				fmt.Println("\nAdd a connection with: dbridge config add <name>")
 				return nil
 			}
 
 			if !formatter.HumanMode {
-				profiles := make([]map[string]interface{}, 0, len(cfg.Profiles))
-				for name, profile := range cfg.Profiles {
-					driver := profile.Driver
+				connections := make([]map[string]interface{}, 0, len(cfg.Connections))
+				for name, conn := range cfg.Connections {
+					driver := conn.Driver
 					if driver == "" {
 						driver = "postgres"
 					}
-					profiles = append(profiles, map[string]interface{}{
+					connections = append(connections, map[string]interface{}{
 						"driver":     driver,
 						"name":       name,
-						"host":       profile.Host,
-						"port":       profile.Port,
-						"database":   profile.Database,
-						"username":   profile.Username,
-						"ssl_mode":   profile.SSLMode,
-						"read_only":  profile.ReadOnly,
-						"disabled":   profile.Disabled,
+						"host":       conn.Host,
+						"port":       conn.Port,
+						"database":   conn.Database,
+						"username":   conn.Username,
+						"ssl_mode":   conn.SSLMode,
+						"read_only":  conn.ReadOnly,
+						"disabled":   conn.Disabled,
 					})
 				}
 
 				return formatter.Success("config_list", map[string]interface{}{
-					"profiles":        profiles,
-					"total_count":     len(cfg.Profiles),
-				}, fmt.Sprintf("Found %d profile(s)", len(cfg.Profiles)))
+					"connections":     connections,
+					"total_count":     len(cfg.Connections),
+				}, fmt.Sprintf("Found %d connection(s)", len(cfg.Connections)))
 			}
 
-			fmt.Println("Profiles:")
-			for name, profile := range cfg.Profiles {
+			fmt.Println("Connections:")
+			for name, conn := range cfg.Connections {
 				markers := ""
-				if profile.ReadOnly {
+				if conn.ReadOnly {
 					markers += " [read-only]"
 				} else {
 					markers += " [read-write]"
 				}
-				if profile.Disabled {
+				if conn.Disabled {
 					markers += " [DISABLED]"
 				}
 
 				fmt.Printf("  %s - %s:%d/%s%s\n",
 					name,
-					profile.Host,
-					profile.Port,
-					profile.Database,
+					conn.Host,
+					conn.Port,
+					conn.Database,
 					markers,
 				)
 			}
@@ -427,56 +429,56 @@ func newConfigListCmd() *cobra.Command {
 // newConfigShowCmd creates the 'config show' command
 func newConfigShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show [profile-name]",
-		Short: "Show profile details",
+		Use:   "show [connection-name]",
+		Short: "Show connection details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			formatter := getFormatter(cmd)
-			profileName := args[0]
+			connName := args[0]
 
 			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			profile, err := cfg.GetProfile(profileName)
+			conn, err := cfg.GetConnection(connName)
 			if err != nil {
-				return formatError(cmd, "profile_not_found",
-					fmt.Sprintf("profile not found: %s", profileName),
+				return formatError(cmd, "connection_not_found",
+					fmt.Sprintf("connection not found: %s", connName),
 					map[string]interface{}{
-						"profile_name":       profileName,
-						"available_profiles": getProfileNames(cfg),
+						"connection_name":       connName,
+						"available_connections": cfg.ListConnections(),
 					})
 			}
 
 			if !formatter.HumanMode {
 				data := map[string]interface{}{
-					"profile": map[string]interface{}{
-						"driver":     profile.Driver,
-						"name":       profile.Name,
-						"host":       profile.Host,
-						"port":       profile.Port,
-						"database":   profile.Database,
-						"username":   profile.Username,
-						"ssl_mode":   profile.SSLMode,
-						"read_only":  profile.ReadOnly,
-						"disabled":   profile.Disabled,
+					"connection": map[string]interface{}{
+						"driver":     conn.Driver,
+						"name":       conn.Name,
+						"host":       conn.Host,
+						"port":       conn.Port,
+						"database":   conn.Database,
+						"username":   conn.Username,
+						"ssl_mode":   conn.SSLMode,
+						"read_only":  conn.ReadOnly,
+						"disabled":   conn.Disabled,
 					},
 					"has_credentials": true,
 				}
 
 				return formatter.Success("config_show", data,
-					fmt.Sprintf("Profile '%s' details", profileName))
+					fmt.Sprintf("Connection '%s' details", connName))
 			}
 
-			fmt.Printf("Profile: %s\n", profile.Name)
-			fmt.Printf("Driver: %s\n", profile.Driver)
-			fmt.Printf("Host: %s\n", profile.Host)
-			fmt.Printf("Port: %d\n", profile.Port)
-			fmt.Printf("Database: %s\n", profile.Database)
-			fmt.Printf("Username: %s\n", profile.Username)
-			fmt.Printf("SSL Mode: %s\n", profile.SSLMode)
-			fmt.Printf("Read-only: %t\n", profile.ReadOnly)
+			fmt.Printf("Connection: %s\n", conn.Name)
+			fmt.Printf("Driver: %s\n", conn.Driver)
+			fmt.Printf("Host: %s\n", conn.Host)
+			fmt.Printf("Port: %d\n", conn.Port)
+			fmt.Printf("Database: %s\n", conn.Database)
+			fmt.Printf("Username: %s\n", conn.Username)
+			fmt.Printf("SSL Mode: %s\n", conn.SSLMode)
+			fmt.Printf("Read-only: %t\n", conn.ReadOnly)
 			fmt.Printf("Credentials: stored in keychain\n")
 
 			return nil
@@ -487,12 +489,12 @@ func newConfigShowCmd() *cobra.Command {
 // newConfigRemoveCmd creates the 'config remove' command
 func newConfigRemoveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "remove [profile-name]",
-		Short: "Remove a connection profile",
+		Use:   "remove [connection-name]",
+		Short: "Remove a connection",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			formatter := getFormatter(cmd)
-			profileName := args[0]
+			connName := args[0]
 
 			cfg, err := config.Load()
 			if err != nil {
@@ -506,18 +508,18 @@ func newConfigRemoveCmd() *cobra.Command {
 			}
 
 			ctx := context.Background()
-			credDeleteErr := credStore.Delete(ctx, profileName)
+			credDeleteErr := credStore.Delete(ctx, connName)
 			if credDeleteErr != nil && formatter.HumanMode {
 				fmt.Printf("Warning: failed to delete credentials: %v\n", credDeleteErr)
 			}
 
-			// Remove profile from config
-			if err := cfg.RemoveProfile(profileName); err != nil {
-				return formatError(cmd, "profile_not_found",
-					fmt.Sprintf("profile not found: %s", profileName),
+			// Remove connection from config
+			if err := cfg.RemoveConnection(connName); err != nil {
+				return formatError(cmd, "connection_not_found",
+					fmt.Sprintf("connection not found: %s", connName),
 					map[string]interface{}{
-						"profile_name":       profileName,
-						"available_profiles": getProfileNames(cfg),
+						"connection_name":       connName,
+						"available_connections": cfg.ListConnections(),
 					})
 			}
 
@@ -528,14 +530,14 @@ func newConfigRemoveCmd() *cobra.Command {
 
 			if !formatter.HumanMode {
 				data := map[string]interface{}{
-					"profile_name":        profileName,
+					"connection_name":     connName,
 					"credentials_deleted": credDeleteErr == nil,
 				}
 				return formatter.Success("config_remove", data,
-					fmt.Sprintf("Profile '%s' removed successfully", profileName))
+					fmt.Sprintf("Connection '%s' removed successfully", connName))
 			}
 
-			fmt.Printf("✓ Profile '%s' removed\n", profileName)
+			fmt.Printf("✓ Connection '%s' removed\n", connName)
 
 			return nil
 		},
@@ -545,14 +547,14 @@ func newConfigRemoveCmd() *cobra.Command {
 // newConfigCloneCmd creates the 'config clone' command
 func newConfigCloneCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "clone <source-profile> [new-profile-name]",
-		Short: "Clone an existing profile with a new name",
-		Long: `Clone an existing database profile to create a new one.
+		Use:   "clone <source-connection> [new-connection-name]",
+		Short: "Clone an existing connection with a new name",
+		Long: `Clone an existing database connection to create a new one.
 
-All settings from the source profile will be copied to the new profile.
+All settings from the source connection will be copied to the new connection.
 You can interactively edit any fields during the cloning process.
 
-The new profile will have its own separate credentials in the keychain.
+The new connection will have its own separate credentials in the keychain.
 
 Examples:
   dbridge config clone production staging
@@ -561,7 +563,7 @@ Examples:
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			formatter := getFormatter(cmd)
-			sourceProfileName := args[0]
+			sourceConnName := args[0]
 
 			// Default (JSON) mode not supported for clone (requires interactive TUI)
 			if !formatter.HumanMode {
@@ -576,82 +578,82 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			// Get source profile
-			sourceProfile, err := cfg.GetProfile(sourceProfileName)
+			// Get source connection
+			sourceConn, err := cfg.GetConnection(sourceConnName)
 			if err != nil {
-				return fmt.Errorf("source profile not found: %w", err)
+				return fmt.Errorf("source connection not found: %w", err)
 			}
 
-			// Load source credentials (may not exist for passwordless profiles)
+			// Load source credentials (may not exist for passwordless connections)
 			credStore, err := credentials.NewStore("dbridge")
 			if err != nil {
 				return fmt.Errorf("failed to open credential store: %w", err)
 			}
 
 			ctx := context.Background()
-			sourceCreds, err := credStore.Load(ctx, sourceProfileName)
+			sourceCreds, err := credStore.Load(ctx, sourceConnName)
 
-			// Default to empty password if credentials don't exist (passwordless profile)
+			// Default to empty password if credentials don't exist (passwordless connection)
 			sourcePassword := ""
 			if err == nil {
 				sourcePassword = sourceCreds.Password
 			}
 
-			// Determine new profile name
-			newProfileName := ""
+			// Determine new connection name
+			newConnName := ""
 			if len(args) > 1 {
-				newProfileName = args[1]
+				newConnName = args[1]
 			}
 
-			// Launch form pre-filled with source profile data
-			_, err = form.RunProfileForm(&form.ProfileData{
-				Driver:   sourceProfile.Driver,
-				Name:     newProfileName,
-				Database: sourceProfile.Database,
-				Host:     sourceProfile.Host,
-				Port:     sourceProfile.Port,
-				Username: sourceProfile.Username,
-				SSLMode:  sourceProfile.SSLMode,
+			// Launch form pre-filled with source connection data
+			_, err = form.RunConnectionForm(&form.ConnectionData{
+				Driver:   sourceConn.Driver,
+				Name:     newConnName,
+				Database: sourceConn.Database,
+				Host:     sourceConn.Host,
+				Port:     sourceConn.Port,
+				Username: sourceConn.Username,
+				SSLMode:  sourceConn.SSLMode,
 				Password: sourcePassword,
-			}, testConnectionOption(), form.WithSave(saveProfileCallback))
+			}, testConnectionOption(), form.WithSave(saveConnectionCallback))
 
 			return err
 		},
 	}
 }
 
-// runEditFlow runs the interactive edit flow for a profile
-func runEditFlow(cfg *config.Config, profileName string) error {
-	// Get existing profile
-	existingProfile, err := cfg.GetProfile(profileName)
+// runEditFlow runs the interactive edit flow for a connection
+func runEditFlow(cfg *config.Config, connName string) error {
+	// Get existing connection
+	existingConn, err := cfg.GetConnection(connName)
 	if err != nil {
-		return fmt.Errorf("profile not found: %w", err)
+		return fmt.Errorf("connection not found: %w", err)
 	}
 
-	// Load existing credentials (may not exist for passwordless profiles)
+	// Load existing credentials (may not exist for passwordless connections)
 	credStore, err := credentials.NewStore("dbridge")
 	if err != nil {
 		return fmt.Errorf("failed to open credential store: %w", err)
 	}
 
 	ctx := context.Background()
-	existingCreds, err := credStore.Load(ctx, profileName)
+	existingCreds, err := credStore.Load(ctx, connName)
 
-	// Default to empty password if credentials don't exist (passwordless profile)
+	// Default to empty password if credentials don't exist (passwordless connection)
 	existingPassword := ""
 	if err == nil {
 		existingPassword = existingCreds.Password
 	}
 
 	// Launch form pre-filled with existing data
-	editSaveFn := func(d *form.ProfileData) string {
-		nameChanged := d.Name != profileName
+	editSaveFn := func(d *form.ConnectionData) string {
+		nameChanged := d.Name != connName
 		if nameChanged {
-			_ = cfg.RemoveProfile(profileName)
-			_ = credStore.Delete(ctx, profileName)
+			_ = cfg.RemoveConnection(connName)
+			_ = credStore.Delete(ctx, connName)
 		}
 
-		updatedProfile := &config.Profile{
+		updatedConn := &config.Connection{
 			Driver:   d.Driver,
 			Name:     d.Name,
 			Host:     d.Host,
@@ -660,7 +662,7 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 			Username: d.Username,
 			SSLMode:  d.SSLMode,
 			ReadOnly: true,
-			Disabled: existingProfile.Disabled,
+			Disabled: existingConn.Disabled,
 		}
 
 		if d.Password != "" {
@@ -674,21 +676,21 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 			_ = credStore.Delete(ctx, d.Name)
 		}
 
-		cfg.AddProfile(updatedProfile)
+		cfg.AddConnection(updatedConn)
 		if err := cfg.Save(); err != nil {
 			return "failed to save config: " + err.Error()
 		}
 		return ""
 	}
 
-	_, err = form.RunProfileForm(&form.ProfileData{
-		Driver:   existingProfile.Driver,
-		Name:     existingProfile.Name,
-		Database: existingProfile.Database,
-		Host:     existingProfile.Host,
-		Port:     existingProfile.Port,
-		Username: existingProfile.Username,
-		SSLMode:  existingProfile.SSLMode,
+	_, err = form.RunConnectionForm(&form.ConnectionData{
+		Driver:   existingConn.Driver,
+		Name:     existingConn.Name,
+		Database: existingConn.Database,
+		Host:     existingConn.Host,
+		Port:     existingConn.Port,
+		Username: existingConn.Username,
+		SSLMode:  existingConn.SSLMode,
 		Password: existingPassword,
 	}, testConnectionOption(), form.WithSave(editSaveFn))
 
@@ -699,10 +701,10 @@ func runEditFlow(cfg *config.Config, profileName string) error {
 func newConfigManageCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "manage",
-		Short: "Interactive profile management menu",
-		Long: `Interactively manage database connection profiles.
+		Short: "Interactive connection management menu",
+		Long: `Interactively manage database connections.
 
-Provides a menu to enable/disable and delete profiles.
+Provides a menu to enable/disable and delete connections.
 Requires a terminal for interactive mode.
 
 Examples:
@@ -722,10 +724,10 @@ Examples:
 	}
 }
 
-// toggleProfile flips the Disabled state and saves
-func toggleProfile(cfg *config.Config, name string) error {
-	profile := cfg.Profiles[name]
-	profile.Disabled = !profile.Disabled
+// toggleConnection flips the Disabled state and saves
+func toggleConnection(cfg *config.Config, name string) error {
+	conn := cfg.Connections[name]
+	conn.Disabled = !conn.Disabled
 	return cfg.Save()
 }
 
@@ -748,7 +750,7 @@ func (r *connectionTestResult) toMap() map[string]interface{} {
 
 // testConnectionOption returns a FormOption that adds inline connection testing via ctrl+t.
 func testConnectionOption() form.FormOption {
-	return form.WithTestConnection(func(d *form.ProfileData) string {
+	return form.WithTestConnection(func(d *form.ConnectionData) string {
 		result := runConnectionTest(context.Background(), d)
 		if result.Success {
 			return ""
@@ -757,8 +759,8 @@ func testConnectionOption() form.FormOption {
 	})
 }
 
-// runConnectionTest tests a database connection using the given profile data
-func runConnectionTest(ctx context.Context, data *form.ProfileData) *connectionTestResult {
+// runConnectionTest tests a database connection using the given connection data
+func runConnectionTest(ctx context.Context, data *form.ConnectionData) *connectionTestResult {
 	connConfig := &dbpkg.ConnectionConfig{
 		Driver:   data.Driver,
 		Host:     data.Host,

@@ -11,7 +11,7 @@ import (
 // Config represents the application configuration
 type Config struct {
 	Settings Settings            `mapstructure:"settings" yaml:"settings"`
-	Profiles map[string]*Profile `mapstructure:"profiles" yaml:"profiles"`
+	Connections map[string]*Connection `mapstructure:"connections" yaml:"connections"`
 }
 
 // Settings holds global application settings
@@ -38,8 +38,8 @@ type SafetyConfig struct {
 	MaxRowsWithoutConfirmation int      `mapstructure:"max_rows_without_confirmation" yaml:"max_rows_without_confirmation"` // Threshold for confirmations
 }
 
-// Profile represents a database connection profile
-type Profile struct {
+// Connection represents a named database connection
+type Connection struct {
 	Driver   string `mapstructure:"driver" yaml:"driver,omitempty"`
 	Name     string `mapstructure:"name" yaml:"name"`
 	Host     string `mapstructure:"host" yaml:"host"`
@@ -86,7 +86,7 @@ func DefaultConfig() *Config {
 			AuditLog:     true,
 			AuditLogPath: "~/.dbridge/audit.log",
 		},
-		Profiles: make(map[string]*Profile),
+		Connections: make(map[string]*Connection),
 	}
 }
 
@@ -124,6 +124,16 @@ func Load() (*Config, error) {
 		config.Settings.Output = defaults.Settings.Output
 	}
 
+	// Backward compat: migrate old "profiles" key to "connections"
+	if len(config.Connections) == 0 && viper.IsSet("profiles") {
+		var compat struct {
+			Profiles map[string]*Connection `mapstructure:"profiles"`
+		}
+		if err := viper.Unmarshal(&compat); err == nil && len(compat.Profiles) > 0 {
+			config.Connections = compat.Profiles
+		}
+	}
+
 	return &config, nil
 }
 
@@ -142,7 +152,11 @@ func (c *Config) Save() error {
 	configPath := filepath.Join(configDir, "config.yaml")
 
 	viper.Set("settings", c.Settings)
-	viper.Set("profiles", c.Profiles)
+	viper.Set("connections", c.Connections)
+	// Clean up old "profiles" key after migration
+	if viper.IsSet("profiles") {
+		viper.Set("profiles", nil)
+	}
 
 	if err := viper.WriteConfigAs(configPath); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -151,64 +165,64 @@ func (c *Config) Save() error {
 	return nil
 }
 
-// AddProfile adds or updates a profile
-func (c *Config) AddProfile(profile *Profile) {
-	if c.Profiles == nil {
-		c.Profiles = make(map[string]*Profile)
+// AddConnection adds or updates a connection
+func (c *Config) AddConnection(conn *Connection) {
+	if c.Connections == nil {
+		c.Connections = make(map[string]*Connection)
 	}
-	c.Profiles[profile.Name] = profile
+	c.Connections[conn.Name] = conn
 }
 
-// GetProfile retrieves a profile by name
-func (c *Config) GetProfile(name string) (*Profile, error) {
+// GetConnection retrieves a connection by name
+func (c *Config) GetConnection(name string) (*Connection, error) {
 	if name == "" {
-		return nil, fmt.Errorf("profile name is required")
+		return nil, fmt.Errorf("connection name is required")
 	}
 
-	profile, ok := c.Profiles[name]
+	conn, ok := c.Connections[name]
 	if !ok {
-		return nil, fmt.Errorf("profile '%s' not found", name)
+		return nil, fmt.Errorf("connection '%s' not found", name)
 	}
 
-	// Default empty driver to postgres (backward compat for pre-multi-driver profiles)
-	if profile.Driver == "" {
-		profile.Driver = "postgres"
+	// Default empty driver to postgres (backward compat for pre-multi-driver connections)
+	if conn.Driver == "" {
+		conn.Driver = "postgres"
 	}
 
 	// Apply driver-specific defaults
-	defaults, ok := driverDefaults[profile.Driver]
+	defaults, ok := driverDefaults[conn.Driver]
 	if !ok {
 		// Unknown or empty driver: use postgres defaults for port/ssl
 		defaults = driverDefaults["postgres"]
 	}
-	if profile.Port == 0 {
-		profile.Port = defaults.Port
+	if conn.Port == 0 {
+		conn.Port = defaults.Port
 	}
-	if profile.SSLMode == "" {
-		profile.SSLMode = defaults.SSLMode
+	if conn.SSLMode == "" {
+		conn.SSLMode = defaults.SSLMode
 	}
 
-	return profile, nil
+	return conn, nil
 }
 
-// RemoveProfile removes a profile
-func (c *Config) RemoveProfile(name string) error {
-	if _, ok := c.Profiles[name]; !ok {
-		return fmt.Errorf("profile '%s' not found", name)
+// RemoveConnection removes a connection
+func (c *Config) RemoveConnection(name string) error {
+	if _, ok := c.Connections[name]; !ok {
+		return fmt.Errorf("connection '%s' not found", name)
 	}
 
-	delete(c.Profiles, name)
+	delete(c.Connections, name)
 
 	return nil
 }
 
-// ListProfiles returns all profile names
-func (c *Config) ListProfiles() []string {
-	profiles := make([]string, 0, len(c.Profiles))
-	for name := range c.Profiles {
-		profiles = append(profiles, name)
+// ListConnections returns all connection names
+func (c *Config) ListConnections() []string {
+	connections := make([]string, 0, len(c.Connections))
+	for name := range c.Connections {
+		connections = append(connections, name)
 	}
-	return profiles
+	return connections
 }
 
 // getConfigDir returns the configuration directory path

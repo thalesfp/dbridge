@@ -34,11 +34,11 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-// TestAddProfile tests adding a profile
-func TestAddProfile(t *testing.T) {
+// TestAddConnection tests adding a connection
+func TestAddConnection(t *testing.T) {
 	cfg := DefaultConfig()
 
-	profile := &Profile{
+	connection := &Connection{
 		Name:     "test-db",
 		Host:     "localhost",
 		Port:     5432,
@@ -48,32 +48,32 @@ func TestAddProfile(t *testing.T) {
 		ReadOnly: false,
 	}
 
-	cfg.AddProfile(profile)
+	cfg.AddConnection(connection)
 
-	// Verify profile was added
-	if len(cfg.Profiles) != 1 {
-		t.Errorf("Expected 1 profile, got %d", len(cfg.Profiles))
+	// Verify connection was added
+	if len(cfg.Connections) != 1 {
+		t.Errorf("Expected 1 connection, got %d", len(cfg.Connections))
 	}
 
-	loadedProfile, ok := cfg.Profiles["test-db"]
+	loadedConnection, ok := cfg.Connections["test-db"]
 	if !ok {
-		t.Fatal("Profile 'test-db' not found")
+		t.Fatal("Connection 'test-db' not found")
 	}
 
-	if loadedProfile.Host != profile.Host {
-		t.Errorf("Expected host %s, got %s", profile.Host, loadedProfile.Host)
+	if loadedConnection.Host != connection.Host {
+		t.Errorf("Expected host %s, got %s", connection.Host, loadedConnection.Host)
 	}
 
-	if loadedProfile.Port != profile.Port {
-		t.Errorf("Expected port %d, got %d", profile.Port, loadedProfile.Port)
+	if loadedConnection.Port != connection.Port {
+		t.Errorf("Expected port %d, got %d", connection.Port, loadedConnection.Port)
 	}
 }
 
-// TestGetProfile tests retrieving a profile
-func TestGetProfile(t *testing.T) {
+// TestGetConnection tests retrieving a connection
+func TestGetConnection(t *testing.T) {
 	cfg := DefaultConfig()
 
-	profile := &Profile{
+	connection := &Connection{
 		Name:     "test-db",
 		Host:     "localhost",
 		Port:     5432,
@@ -81,112 +81,112 @@ func TestGetProfile(t *testing.T) {
 		Username: "testuser",
 	}
 
-	cfg.AddProfile(profile)
+	cfg.AddConnection(connection)
 
-	// Get profile by name
-	loadedProfile, err := cfg.GetProfile("test-db")
+	// Get connection by name
+	loadedConnection, err := cfg.GetConnection("test-db")
 	if err != nil {
-		t.Fatalf("Failed to get profile: %v", err)
+		t.Fatalf("Failed to get connection: %v", err)
 	}
 
-	if loadedProfile.Name != profile.Name {
-		t.Errorf("Expected name %s, got %s", profile.Name, loadedProfile.Name)
+	if loadedConnection.Name != connection.Name {
+		t.Errorf("Expected name %s, got %s", connection.Name, loadedConnection.Name)
 	}
 
 	// Empty name should return an error
-	_, err = cfg.GetProfile("")
+	_, err = cfg.GetConnection("")
 	if err == nil {
-		t.Error("Expected error when getting profile with empty name")
+		t.Error("Expected error when getting connection with empty name")
 	}
 }
 
-// TestGetProfile_Nonexistent tests getting a nonexistent profile
-func TestGetProfile_Nonexistent(t *testing.T) {
+// TestGetConnection_Nonexistent tests getting a nonexistent connection
+func TestGetConnection_Nonexistent(t *testing.T) {
 	cfg := DefaultConfig()
 
-	_, err := cfg.GetProfile("nonexistent")
+	_, err := cfg.GetConnection("nonexistent")
 	if err == nil {
-		t.Error("Expected error when getting nonexistent profile")
+		t.Error("Expected error when getting nonexistent connection")
 	}
 }
 
-// TestRemoveProfile tests removing a profile
-func TestRemoveProfile(t *testing.T) {
+// TestRemoveConnection tests removing a connection
+func TestRemoveConnection(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// Add two profiles
-	cfg.AddProfile(&Profile{
-		Name:     "profile1",
+	// Add two connections
+	cfg.AddConnection(&Connection{
+		Name:     "connection1",
 		Host:     "host1",
 		Database: "db1",
 		Username: "user1",
 	})
 
-	cfg.AddProfile(&Profile{
-		Name:     "profile2",
+	cfg.AddConnection(&Connection{
+		Name:     "connection2",
 		Host:     "host2",
 		Database: "db2",
 		Username: "user2",
 	})
 
-	// Remove profile1
-	err := cfg.RemoveProfile("profile1")
+	// Remove connection1
+	err := cfg.RemoveConnection("connection1")
 	if err != nil {
-		t.Fatalf("Failed to remove profile: %v", err)
+		t.Fatalf("Failed to remove connection: %v", err)
 	}
 
 	// Verify removal
-	if len(cfg.Profiles) != 1 {
-		t.Errorf("Expected 1 profile remaining, got %d", len(cfg.Profiles))
+	if len(cfg.Connections) != 1 {
+		t.Errorf("Expected 1 connection remaining, got %d", len(cfg.Connections))
 	}
 
-	_, ok := cfg.Profiles["profile1"]
+	_, ok := cfg.Connections["connection1"]
 	if ok {
-		t.Error("Profile 'profile1' should be removed")
+		t.Error("Connection 'connection1' should be removed")
 	}
 }
 
-// TestRemoveProfile_LastProfile tests removing the last profile
-func TestRemoveProfile_LastProfile(t *testing.T) {
+// TestRemoveConnection_LastConnection tests removing the last connection
+func TestRemoveConnection_LastConnection(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// Add one profile
-	cfg.AddProfile(&Profile{
-		Name:     "only-profile",
+	// Add one connection
+	cfg.AddConnection(&Connection{
+		Name:     "only-connection",
 		Host:     "host",
 		Database: "db",
 		Username: "user",
 	})
 
 	// Remove it
-	err := cfg.RemoveProfile("only-profile")
+	err := cfg.RemoveConnection("only-connection")
 	if err != nil {
-		t.Fatalf("Failed to remove profile: %v", err)
+		t.Fatalf("Failed to remove connection: %v", err)
 	}
 
-	if len(cfg.Profiles) != 0 {
-		t.Errorf("Expected 0 profiles, got %d", len(cfg.Profiles))
+	if len(cfg.Connections) != 0 {
+		t.Errorf("Expected 0 connections, got %d", len(cfg.Connections))
 	}
 }
 
-// TestRemoveProfile_Nonexistent tests removing a nonexistent profile
-func TestRemoveProfile_Nonexistent(t *testing.T) {
+// TestRemoveConnection_Nonexistent tests removing a nonexistent connection
+func TestRemoveConnection_Nonexistent(t *testing.T) {
 	cfg := DefaultConfig()
 
-	err := cfg.RemoveProfile("nonexistent")
+	err := cfg.RemoveConnection("nonexistent")
 	if err == nil {
-		t.Error("Expected error when removing nonexistent profile")
+		t.Error("Expected error when removing nonexistent connection")
 	}
 }
 
-// TestListProfiles tests listing all profiles
-func TestListProfiles(t *testing.T) {
+// TestListConnections tests listing all connections
+func TestListConnections(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// Add multiple profiles
-	profileNames := []string{"profile1", "profile2", "profile3"}
-	for _, name := range profileNames {
-		cfg.AddProfile(&Profile{
+	// Add multiple connections
+	connectionNames := []string{"connection1", "connection2", "connection3"}
+	for _, name := range connectionNames {
+		cfg.AddConnection(&Connection{
 			Name:     name,
 			Host:     "host",
 			Database: "db",
@@ -194,29 +194,29 @@ func TestListProfiles(t *testing.T) {
 		})
 	}
 
-	// List profiles
-	listedProfiles := cfg.ListProfiles()
+	// List connections
+	listedConnections := cfg.ListConnections()
 
-	if len(listedProfiles) != len(profileNames) {
-		t.Errorf("Expected %d profiles, got %d", len(profileNames), len(listedProfiles))
+	if len(listedConnections) != len(connectionNames) {
+		t.Errorf("Expected %d connections, got %d", len(connectionNames), len(listedConnections))
 	}
 
-	// Verify all profiles are present
-	profileMap := make(map[string]bool)
-	for _, name := range listedProfiles {
-		profileMap[name] = true
+	// Verify all connections are present
+	connectionMap := make(map[string]bool)
+	for _, name := range listedConnections {
+		connectionMap[name] = true
 	}
 
-	for _, name := range profileNames {
-		if !profileMap[name] {
-			t.Errorf("Profile %s not found in list", name)
+	for _, name := range connectionNames {
+		if !connectionMap[name] {
+			t.Errorf("Connection %s not found in list", name)
 		}
 	}
 }
 
-// TestProfileDefaults tests profile default values
-func TestProfileDefaults(t *testing.T) {
-	profile := &Profile{
+// TestConnectionDefaults tests connection default values
+func TestConnectionDefaults(t *testing.T) {
+	connection := &Connection{
 		Name:     "test",
 		Host:     "localhost",
 		Database: "testdb",
@@ -224,35 +224,35 @@ func TestProfileDefaults(t *testing.T) {
 	}
 
 	// Default port should be 0 (will be set to 5432 by defaults or during connection)
-	if profile.Port != 0 {
-		t.Errorf("Expected default port 0, got %d", profile.Port)
+	if connection.Port != 0 {
+		t.Errorf("Expected default port 0, got %d", connection.Port)
 	}
 
 	// Default readonly should be false
-	if profile.ReadOnly {
+	if connection.ReadOnly {
 		t.Error("Expected default ReadOnly to be false")
 	}
 
 	// Default disabled should be false (zero value)
-	if profile.Disabled {
+	if connection.Disabled {
 		t.Error("Expected default Disabled to be false")
 	}
 }
 
-// TestProfileDisabledField tests the Disabled field behavior
-func TestProfileDisabledField(t *testing.T) {
+// TestConnectionDisabledField tests the Disabled field behavior
+func TestConnectionDisabledField(t *testing.T) {
 	cfg := DefaultConfig()
 
-	// Add an enabled profile (default)
-	cfg.AddProfile(&Profile{
+	// Add an enabled connection (default)
+	cfg.AddConnection(&Connection{
 		Name:     "enabled-db",
 		Host:     "localhost",
 		Database: "testdb",
 		Username: "user",
 	})
 
-	// Add a disabled profile
-	cfg.AddProfile(&Profile{
+	// Add a disabled connection
+	cfg.AddConnection(&Connection{
 		Name:     "disabled-db",
 		Host:     "localhost",
 		Database: "testdb",
@@ -260,61 +260,61 @@ func TestProfileDisabledField(t *testing.T) {
 		Disabled: true,
 	})
 
-	// Verify enabled profile
-	enabledProfile, err := cfg.GetProfile("enabled-db")
+	// Verify enabled connection
+	enabledConnection, err := cfg.GetConnection("enabled-db")
 	if err != nil {
-		t.Fatalf("Failed to get enabled profile: %v", err)
+		t.Fatalf("Failed to get enabled connection: %v", err)
 	}
-	if enabledProfile.Disabled {
-		t.Error("Expected enabled profile to have Disabled=false")
+	if enabledConnection.Disabled {
+		t.Error("Expected enabled connection to have Disabled=false")
 	}
 
-	// Verify disabled profile
-	disabledProfile, err := cfg.GetProfile("disabled-db")
+	// Verify disabled connection
+	disabledConnection, err := cfg.GetConnection("disabled-db")
 	if err != nil {
-		t.Fatalf("Failed to get disabled profile: %v", err)
+		t.Fatalf("Failed to get disabled connection: %v", err)
 	}
-	if !disabledProfile.Disabled {
-		t.Error("Expected disabled profile to have Disabled=true")
+	if !disabledConnection.Disabled {
+		t.Error("Expected disabled connection to have Disabled=true")
 	}
 }
 
-// TestToggleProfileDisabled tests toggling the Disabled state
-func TestToggleProfileDisabled(t *testing.T) {
+// TestToggleConnectionDisabled tests toggling the Disabled state
+func TestToggleConnectionDisabled(t *testing.T) {
 	cfg := DefaultConfig()
 
-	cfg.AddProfile(&Profile{
+	cfg.AddConnection(&Connection{
 		Name:     "toggle-test",
 		Host:     "localhost",
 		Database: "testdb",
 		Username: "user",
 	})
 
-	profile := cfg.Profiles["toggle-test"]
+	connection := cfg.Connections["toggle-test"]
 
 	// Initially not disabled
-	if profile.Disabled {
-		t.Error("Expected profile to start as not disabled")
+	if connection.Disabled {
+		t.Error("Expected connection to start as not disabled")
 	}
 
 	// Disable it
-	profile.Disabled = true
-	if !profile.Disabled {
-		t.Error("Expected profile to be disabled after toggle")
+	connection.Disabled = true
+	if !connection.Disabled {
+		t.Error("Expected connection to be disabled after toggle")
 	}
 
 	// Re-enable it
-	profile.Disabled = false
-	if profile.Disabled {
-		t.Error("Expected profile to be enabled after second toggle")
+	connection.Disabled = false
+	if connection.Disabled {
+		t.Error("Expected connection to be enabled after second toggle")
 	}
 }
 
-// TestGetProfile_DriverDefaults tests driver-specific defaults
-func TestGetProfile_DriverDefaults(t *testing.T) {
+// TestGetConnection_DriverDefaults tests driver-specific defaults
+func TestGetConnection_DriverDefaults(t *testing.T) {
 	t.Run("postgres driver defaults to port 5432", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.AddProfile(&Profile{
+		cfg.AddConnection(&Connection{
 			Name:     "pg-db",
 			Driver:   "postgres",
 			Host:     "localhost",
@@ -322,7 +322,7 @@ func TestGetProfile_DriverDefaults(t *testing.T) {
 			Username: "user",
 		})
 
-		p, err := cfg.GetProfile("pg-db")
+		p, err := cfg.GetConnection("pg-db")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -336,14 +336,14 @@ func TestGetProfile_DriverDefaults(t *testing.T) {
 
 	t.Run("empty driver falls back to postgres port/ssl defaults", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.AddProfile(&Profile{
+		cfg.AddConnection(&Connection{
 			Name:     "legacy-db",
 			Host:     "localhost",
 			Database: "testdb",
 			Username: "user",
 		})
 
-		p, err := cfg.GetProfile("legacy-db")
+		p, err := cfg.GetConnection("legacy-db")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -360,7 +360,7 @@ func TestGetProfile_DriverDefaults(t *testing.T) {
 
 	t.Run("mysql driver defaults to port 3306", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.AddProfile(&Profile{
+		cfg.AddConnection(&Connection{
 			Name:     "my-db",
 			Driver:   "mysql",
 			Host:     "localhost",
@@ -368,7 +368,7 @@ func TestGetProfile_DriverDefaults(t *testing.T) {
 			Username: "user",
 		})
 
-		p, err := cfg.GetProfile("my-db")
+		p, err := cfg.GetConnection("my-db")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -385,7 +385,7 @@ func TestGetProfile_DriverDefaults(t *testing.T) {
 
 	t.Run("explicit port and ssl override driver defaults", func(t *testing.T) {
 		cfg := DefaultConfig()
-		cfg.AddProfile(&Profile{
+		cfg.AddConnection(&Connection{
 			Name:     "custom-db",
 			Driver:   "mysql",
 			Host:     "localhost",
@@ -395,7 +395,7 @@ func TestGetProfile_DriverDefaults(t *testing.T) {
 			SSLMode:  "disable",
 		})
 
-		p, err := cfg.GetProfile("custom-db")
+		p, err := cfg.GetConnection("custom-db")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -408,24 +408,24 @@ func TestGetProfile_DriverDefaults(t *testing.T) {
 	})
 }
 
-// TestGetProfileStillWorksWhenDisabled tests that GetProfile returns disabled profiles
-func TestGetProfileStillWorksWhenDisabled(t *testing.T) {
+// TestGetConnectionStillWorksWhenDisabled tests that GetConnection returns disabled connections
+func TestGetConnectionStillWorksWhenDisabled(t *testing.T) {
 	cfg := DefaultConfig()
 
-	cfg.AddProfile(&Profile{
-		Name:     "disabled-profile",
+	cfg.AddConnection(&Connection{
+		Name:     "disabled-connection",
 		Host:     "localhost",
 		Database: "testdb",
 		Username: "user",
 		Disabled: true,
 	})
 
-	// GetProfile should still return the profile (disabled check is at connection points)
-	profile, err := cfg.GetProfile("disabled-profile")
+	// GetConnection should still return the connection (disabled check is at connection points)
+	connection, err := cfg.GetConnection("disabled-connection")
 	if err != nil {
-		t.Fatalf("GetProfile should return disabled profiles, got error: %v", err)
+		t.Fatalf("GetConnection should return disabled connections, got error: %v", err)
 	}
-	if !profile.Disabled {
-		t.Error("Expected profile to be disabled")
+	if !connection.Disabled {
+		t.Error("Expected connection to be disabled")
 	}
 }

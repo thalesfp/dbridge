@@ -10,7 +10,7 @@ import (
 )
 
 func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	profile, err := request.RequireString("profile")
+	connName, err := request.RequireString("connection")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -19,7 +19,7 @@ func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	conn, err := getReadOnlyConnection(profile)
+	conn, err := getReadOnlyConnection(connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -52,13 +52,13 @@ func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	return mcp.NewToolResultText(jsonOutput), nil
 }
 
-func handleListProfiles(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleListConnections(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	type profileInfo struct {
+	type connectionInfo struct {
 		Name     string `json:"name"`
 		Driver   string `json:"driver"`
 		Host     string `json:"host"`
@@ -66,22 +66,22 @@ func handleListProfiles(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		Disabled bool   `json:"disabled,omitempty"`
 	}
 
-	profiles := make([]profileInfo, 0, len(cfg.Profiles))
-	for name, p := range cfg.Profiles {
-		driver := p.Driver
+	connections := make([]connectionInfo, 0, len(cfg.Connections))
+	for name, c := range cfg.Connections {
+		driver := c.Driver
 		if driver == "" {
 			driver = "postgres"
 		}
-		profiles = append(profiles, profileInfo{
+		connections = append(connections, connectionInfo{
 			Name:     name,
 			Driver:   driver,
-			Host:     p.Host,
-			Database: p.Database,
-			Disabled: p.Disabled,
+			Host:     c.Host,
+			Database: c.Database,
+			Disabled: c.Disabled,
 		})
 	}
 
-	bytes, err := json.Marshal(profiles)
+	bytes, err := json.Marshal(connections)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -90,12 +90,12 @@ func handleListProfiles(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 }
 
 func handleListSchemas(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	profile, err := request.RequireString("profile")
+	connName, err := request.RequireString("connection")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	conn, err := getConnection(profile)
+	conn, err := getConnection(connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -120,13 +120,13 @@ func handleListSchemas(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 }
 
 func handleListTables(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	profile, err := request.RequireString("profile")
+	connName, err := request.RequireString("connection")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	schema := request.GetString("schema", "public")
 
-	conn, err := getConnection(profile)
+	conn, err := getConnection(connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -151,7 +151,7 @@ func handleListTables(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 }
 
 func handleDescribeTable(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	profile, err := request.RequireString("profile")
+	connName, err := request.RequireString("connection")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -161,7 +161,7 @@ func handleDescribeTable(ctx context.Context, request mcp.CallToolRequest) (*mcp
 	}
 	schema := request.GetString("schema", "public")
 
-	conn, err := getConnection(profile)
+	conn, err := getConnection(connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -181,7 +181,7 @@ func handleDescribeTable(ctx context.Context, request mcp.CallToolRequest) (*mcp
 }
 
 func handleExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	profile, err := request.RequireString("profile")
+	connName, err := request.RequireString("connection")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -190,7 +190,7 @@ func handleExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	conn, err := getReadOnlyConnection(profile)
+	conn, err := getReadOnlyConnection(connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

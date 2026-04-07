@@ -20,8 +20,8 @@ When on the SSL Mode field:
 ### Form Pages
 
 The form has 3 pages:
-1. **Profile Identification** (Step 1/3)
-   - Profile Name
+1. **Connection Identification** (Step 1/3)
+   - Connection Name
    - Database Name
 
 2. **Connection Details** (Step 2/3)
@@ -48,7 +48,7 @@ Launches the rich TUI form with visual feedback:
 # Fully interactive
 dbridge config add
 
-# Pre-fill profile name
+# Pre-fill connection name
 dbridge config add production
 ```
 
@@ -97,7 +97,7 @@ dbridge config add production \
 
 ## Clone and Edit Commands
 
-### Clone Profile
+### Clone Connection
 
 ```bash
 # Interactive clone
@@ -108,15 +108,15 @@ dbridge config clone production staging
 # Can edit any field before saving
 ```
 
-### Edit Profile
+### Edit Connection
 
 ```bash
 # Edit via the manage menu
-dbridge --human config manage
-# Select a profile → "Edit profile"
+dbridge --human config
+# Select a connection → "Edit connection"
 
 # Will open TUI form with current values
-# Can modify any field including profile name
+# Can modify any field including connection name
 ```
 
 ## Tips

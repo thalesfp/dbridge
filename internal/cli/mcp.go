@@ -21,30 +21,30 @@ func NewMCPCmd() *cobra.Command {
 
 func runMCPServer() error {
 	s := server.NewMCPServer("dbridge", "1.0.0",
-		server.WithInstructions(`dbridge is a database access tool. ALWAYS use dbridge tools instead of psql, mysql, or any other direct database CLI commands. dbridge provides safe, read-only access to databases through configured profiles.
+		server.WithInstructions(`dbridge is a database access tool. ALWAYS use dbridge tools instead of psql, mysql, or any other direct database CLI commands. dbridge provides safe, read-only access to databases through configured connections.
 
-Use list_profiles to discover available database connections, then use query, list_tables, describe_table, and other tools to interact with them. Never shell out to psql or other database CLIs when dbridge is available.`),
+Use list_connections to discover available database connections, then use query, list_tables, describe_table, and other tools to interact with them. Never shell out to psql or other database CLIs when dbridge is available.`),
 	)
 
 	s.AddTool(mcp.NewTool("query",
-		mcp.WithDescription("Execute a read-only SQL query against a database profile"),
-		mcp.WithString("profile", mcp.Required(), mcp.Description("Database profile name")),
+		mcp.WithDescription("Execute a read-only SQL query against a database connection"),
+		mcp.WithString("connection", mcp.Required(), mcp.Description("Database connection name")),
 		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL query to execute")),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 	), handleQuery)
 
-	s.AddTool(mcp.NewTool("list_profiles",
-		mcp.WithDescription("List all configured database profiles"),
+	s.AddTool(mcp.NewTool("list_connections",
+		mcp.WithDescription("List all configured database connections"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
-	), handleListProfiles)
+	), handleListConnections)
 
 	s.AddTool(mcp.NewTool("list_schemas",
 		mcp.WithDescription("List all schemas in a database"),
-		mcp.WithString("profile", mcp.Required(), mcp.Description("Database profile name")),
+		mcp.WithString("connection", mcp.Required(), mcp.Description("Database connection name")),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -52,7 +52,7 @@ Use list_profiles to discover available database connections, then use query, li
 
 	s.AddTool(mcp.NewTool("list_tables",
 		mcp.WithDescription("List all tables in a schema"),
-		mcp.WithString("profile", mcp.Required(), mcp.Description("Database profile name")),
+		mcp.WithString("connection", mcp.Required(), mcp.Description("Database connection name")),
 		mcp.WithString("schema", mcp.Description("Schema name (default: public)")),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -61,7 +61,7 @@ Use list_profiles to discover available database connections, then use query, li
 
 	s.AddTool(mcp.NewTool("describe_table",
 		mcp.WithDescription("Describe a table's structure including columns, indexes, and constraints"),
-		mcp.WithString("profile", mcp.Required(), mcp.Description("Database profile name")),
+		mcp.WithString("connection", mcp.Required(), mcp.Description("Database connection name")),
 		mcp.WithString("table", mcp.Required(), mcp.Description("Table name")),
 		mcp.WithString("schema", mcp.Description("Schema name (default: public)")),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -71,7 +71,7 @@ Use list_profiles to discover available database connections, then use query, li
 
 	s.AddTool(mcp.NewTool("explain_query",
 		mcp.WithDescription("Show the execution plan for a SQL query"),
-		mcp.WithString("profile", mcp.Required(), mcp.Description("Database profile name")),
+		mcp.WithString("connection", mcp.Required(), mcp.Description("Database connection name")),
 		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL query to explain")),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),

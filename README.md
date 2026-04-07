@@ -6,7 +6,7 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 
 - **Multi-Database Support**: PostgreSQL, MySQL
 - **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) — passwords never stored in config files or logs
-- **Multi-Profile Management**: Manage multiple database connections with named profiles
+- **Multi-Connection Management**: Manage multiple database connections with named connections
 - **Multiple Output Formats**: Compact JSON (token-efficient for AI agents), table, and CSV
 - **Schema Inspection**: List schemas, tables, and describe table structures
 - **Read-Only Mode**: Safe query execution without risk of data modification
@@ -76,16 +76,16 @@ dbridge query local "SELECT id, name, active FROM users LIMIT 2"
 # Output: {"cols":["id","name","active"],"rows":[[1,"Alice",true],[2,"Bob",false]]}
 ```
 
-### 3. Manage Profiles
+### 3. Manage Connections
 
 ```bash
-# List all profiles
+# List all connections
 dbridge config list
 
-# Show profile details
+# Show connection details
 dbridge config show local
 
-# Remove profile
+# Remove connection
 dbridge config remove staging
 ```
 
@@ -131,7 +131,7 @@ codex mcp add dbridge -- /path/to/dbridge mcp
 | Tool | Description |
 |------|-------------|
 | `query` | Execute a read-only SQL query |
-| `list_profiles` | List configured database profiles |
+| `list_connections` | List configured database connections |
 | `list_schemas` | List schemas in a database |
 | `list_tables` | List tables in a schema |
 | `describe_table` | Describe table structure |
@@ -150,7 +150,7 @@ settings:
     include_timing: false    # Exclude timing (save tokens)
     smart_simplify: true     # Smart format detection
 
-profiles:
+connections:
   local:
     host: "localhost"
     port: 5432
@@ -169,7 +169,7 @@ Credentials are stored in a **dedicated OS keychain named `dbridge`**, separate 
 - **Windows** — Windows Credential Manager
 - **Linux** — Secret Service (GNOME Keyring / KWallet)
 
-Each profile's credentials are stored as `dbridge-<profile>` (e.g. `dbridge-local`). The config file (`~/.config/dbridge/config.yaml`) never contains passwords.
+Each connection's credentials are stored as `dbridge-<connection-name>` (e.g. `dbridge-local`). The config file (`~/.config/dbridge/config.yaml`) never contains passwords.
 
 ### Why am I prompted for a password again?
 

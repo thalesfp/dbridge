@@ -14,7 +14,7 @@ local   all             all                                     trust
 host    all             all             127.0.0.1/32           trust
 ```
 
-**DBBridge Profile**:
+**DBBridge Connection**:
 ```bash
 # Interactive mode - just press Enter on password field
 dbridge config add local
@@ -38,9 +38,9 @@ local   all             all                                     peer
 - Database username must match OS username
 - Connection via Unix socket only
 
-**DBBridge Profile**:
+**DBBridge Connection**:
 ```bash
-# If your OS username is 'john', create profile with same username
+# If your OS username is 'john', create connection with same username
 dbridge config add local --database=myapp --username=john
 # Leave password empty
 ```
@@ -54,7 +54,7 @@ Uses SSL client certificates for authentication.
 hostssl all             all             0.0.0.0/0              cert
 ```
 
-**DBBridge Profile**:
+**DBBridge Connection**:
 ```bash
 dbridge config add secure \
   --database=myapp \
@@ -73,7 +73,7 @@ Uses Kerberos tickets for authentication.
 host    all             all             0.0.0.0/0              gss
 ```
 
-**DBBridge Profile**:
+**DBBridge Connection**:
 ```bash
 # Requires valid Kerberos ticket (kinit)
 dbridge config add enterprise \
@@ -89,8 +89,8 @@ dbridge config add enterprise \
 **With Password** (traditional):
 ```bash
 $ dbridge config add mydb
-📋 Profile Identification (Step 1/3)
-Profile Name: mydb
+📋 Connection Identification (Step 1/3)
+Connection Name: mydb
 Database Name: myapp
 
 🔌 Connection Details (Step 2/3)
@@ -105,7 +105,7 @@ Password: ••••••••
 
 Confirm Password: ••••••••
 
-✓ Profile 'mydb' added successfully!
+✓ Connection 'mydb' added successfully!
   Host: localhost:5432
   Database: myapp
   Authentication: macOS Keychain
@@ -114,8 +114,8 @@ Confirm Password: ••••••••
 **Without Password** (passwordless):
 ```bash
 $ dbridge config add localdev
-📋 Profile Identification (Step 1/3)
-Profile Name: localdev
+📋 Connection Identification (Step 1/3)
+Connection Name: localdev
 Database Name: myapp
 
 🔌 Connection Details (Step 2/3)
@@ -128,7 +128,7 @@ SSL Mode: prefer
 Pool Size: 5
 Password: [press Enter without typing]
 
-✓ Profile 'localdev' added successfully!
+✓ Connection 'localdev' added successfully!
   Host: localhost:5432
   Database: myapp
   Authentication: Passwordless (trust/peer/cert)
@@ -141,7 +141,7 @@ Password: [press Enter without typing]
 $ dbridge config add mydb --database=myapp --username=admin
 Enter password for admin@localhost (or press Enter for passwordless auth): ••••••••
 Confirm password: ••••••••
-✓ Profile 'mydb' added successfully
+✓ Connection 'mydb' added successfully
 ✓ Credentials stored in macOS Keychain
 ```
 
@@ -149,14 +149,14 @@ Confirm password: ••••••••
 ```bash
 $ dbridge config add localdev --database=myapp --username=postgres
 Enter password for postgres@localhost (or press Enter for passwordless auth): [press Enter]
-✓ Profile 'localdev' added successfully
+✓ Connection 'localdev' added successfully
 ✓ Using passwordless authentication
 ```
 
 **Passwordless** (with explicit empty password flag):
 ```bash
 $ dbridge config add localdev --database=myapp --username=postgres --password=""
-✓ Profile 'localdev' added successfully
+✓ Connection 'localdev' added successfully
 ✓ Using passwordless authentication
 ```
 
@@ -172,7 +172,7 @@ When running PostgreSQL in Docker with trust authentication:
 # environment:
 #   POSTGRES_HOST_AUTH_METHOD: trust
 
-# Create passwordless profile
+# Create passwordless connection
 dbridge config add docker --database=myapp --username=postgres
 ```
 
@@ -184,7 +184,7 @@ On macOS/Linux with peer authentication:
 # PostgreSQL configured with peer auth
 # Your OS username: john
 
-# Create profile matching OS username
+# Create connection matching OS username
 dbridge config add local --database=myapp --username=john
 ```
 
@@ -193,7 +193,7 @@ dbridge config add local --database=myapp --username=john
 For production environments using client certificates:
 
 ```bash
-# Create profile with SSL required, no password
+# Create connection with SSL required, no password
 dbridge config add production \
   --host=db.example.com \
   --database=myapp_prod \
@@ -204,33 +204,33 @@ dbridge config add production \
 
 ## Converting Between Password and Passwordless
 
-### Add Password to Passwordless Profile
+### Add Password to Passwordless Connection
 
 ```bash
-# Edit the profile via the manage menu
-dbridge --human config manage
-# Select 'localdev' → "Edit profile"
+# Edit the connection via the manage menu
+dbridge --human config
+# Select 'localdev' → "Edit connection"
 
 # In the form, enter a password
-# The profile will now use password authentication
+# The connection will now use password authentication
 ```
 
-### Remove Password from Password-Protected Profile
+### Remove Password from Password-Protected Connection
 
 ```bash
-# Edit the profile via the manage menu
-dbridge --human config manage
-# Select 'mydb' → "Edit profile"
+# Edit the connection via the manage menu
+dbridge --human config
+# Select 'mydb' → "Edit connection"
 
 # In the form, delete the password (leave field empty)
-# The profile will now use passwordless authentication
+# The connection will now use passwordless authentication
 ```
 
 ## Troubleshooting
 
 ### "Password authentication failed"
 
-If you created a passwordless profile but get authentication errors:
+If you created a passwordless connection but get authentication errors:
 
 1. Check PostgreSQL's `pg_hba.conf` allows your authentication method
 2. Verify the authentication method matches your connection:
@@ -253,10 +253,10 @@ If you created a passwordless profile but get authentication errors:
 Your PostgreSQL server expects a password. Either:
 
 1. Configure PostgreSQL for passwordless auth (see above), or
-2. Edit the profile and add a password:
+2. Edit the connection and add a password:
    ```bash
-   dbridge --human config manage
-   # Select 'myprofile' → "Edit profile"
+   dbridge --human config
+   # Select 'mydb' → "Edit connection"
    ```
 
 ## Security Considerations
@@ -292,15 +292,15 @@ Your PostgreSQL server expects a password. Either:
 ## Related Commands
 
 ```bash
-# View profile details (shows authentication type)
-dbridge config show myprofile
+# View connection details (shows authentication type)
+dbridge config show mydb
 
-# List all profiles
+# List all connections
 dbridge config list
 
-# Clone a passwordless profile
+# Clone a passwordless connection
 dbridge config clone localdev staging
 
 # Edit authentication settings via manage menu
-dbridge --human config manage
+dbridge --human config
 ```

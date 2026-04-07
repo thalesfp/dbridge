@@ -16,9 +16,9 @@ func NewQueryCmd() *cobra.Command {
 	var format string
 
 	cmd := &cobra.Command{
-		Use:   "query <profile> <sql>",
+		Use:   "query <connection> <sql>",
 		Short: "Execute a SELECT query",
-		Long: `Execute a SELECT query against the specified database profile.
+		Long: `Execute a SELECT query against the specified database connection.
 
 Examples:
   dbridge query production "SELECT * FROM users LIMIT 10"
@@ -26,7 +26,7 @@ Examples:
   dbridge query local "SELECT version()"`,
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			profileName := args[0]
+			connName := args[0]
 			sql := args[1]
 
 			// Load config
@@ -35,13 +35,13 @@ Examples:
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			profileConfig, err := cfg.GetProfile(profileName)
+			connCfg, err := cfg.GetConnection(connName)
 			if err != nil {
 				return err
 			}
 
-			if profileConfig.Disabled {
-				return fmt.Errorf("profile '%s' is disabled (enable it with: dbridge config manage)", profileName)
+			if connCfg.Disabled {
+				return fmt.Errorf("connection '%s' is disabled (enable it with: dbridge config)", connName)
 			}
 
 			// Load credentials
@@ -51,23 +51,23 @@ Examples:
 			}
 
 			ctx := context.Background()
-			creds, err := credStore.Load(ctx, profileName)
+			creds, err := credStore.Load(ctx, connName)
 			if err != nil {
 				creds = credentials.Credentials{
-					Username: profileConfig.Username,
+					Username: connCfg.Username,
 				}
 			}
 
 			// Create database connection
 			connConfig := &database.ConnectionConfig{
-				Driver:   profileConfig.Driver,
-				Host:     profileConfig.Host,
-				Port:     profileConfig.Port,
-				Database: profileConfig.Database,
+				Driver:   connCfg.Driver,
+				Host:     connCfg.Host,
+				Port:     connCfg.Port,
+				Database: connCfg.Database,
 				Username: creds.Username,
 				Password: creds.Password,
-				SSLMode:  profileConfig.SSLMode,
-				ReadOnly: profileConfig.ReadOnly,
+				SSLMode:  connCfg.SSLMode,
+				ReadOnly: connCfg.ReadOnly,
 			}
 
 			conn, err := database.NewConnection(ctx, connConfig)

@@ -17,30 +17,30 @@ func NewMockStore() *MockStore {
 	}
 }
 
-func (m *MockStore) Save(ctx context.Context, profile string, creds Credentials) error {
-	m.data[profile] = creds
+func (m *MockStore) Save(ctx context.Context, connection string, creds Credentials) error {
+	m.data[connection] = creds
 	return nil
 }
 
-func (m *MockStore) Load(ctx context.Context, profile string) (Credentials, error) {
-	creds, ok := m.data[profile]
+func (m *MockStore) Load(ctx context.Context, connection string) (Credentials, error) {
+	creds, ok := m.data[connection]
 	if !ok {
-		return Credentials{}, &KeyringError{Profile: profile}
+		return Credentials{}, &KeyringError{Connection: connection}
 	}
 	return creds, nil
 }
 
-func (m *MockStore) Delete(ctx context.Context, profile string) error {
-	delete(m.data, profile)
+func (m *MockStore) Delete(ctx context.Context, connection string) error {
+	delete(m.data, connection)
 	return nil
 }
 
 func (m *MockStore) List(ctx context.Context) ([]string, error) {
-	profiles := make([]string, 0, len(m.data))
-	for profile := range m.data {
-		profiles = append(profiles, profile)
+	connections := make([]string, 0, len(m.data))
+	for name := range m.data {
+		connections = append(connections, name)
 	}
-	return profiles, nil
+	return connections, nil
 }
 
 func (m *MockStore) Available() bool {
@@ -53,11 +53,11 @@ func (m *MockStore) Type() string {
 
 // KeyringError represents a keyring error
 type KeyringError struct {
-	Profile string
+	Connection string
 }
 
 func (e *KeyringError) Error() string {
-	return "profile not found: " + e.Profile
+	return "connection not found: " + e.Connection
 }
 
 // TestMockStore_SaveAndLoad tests saving and loading credentials
@@ -71,13 +71,13 @@ func TestMockStore_SaveAndLoad(t *testing.T) {
 		Password: "testpass",
 	}
 
-	err := store.Save(ctx, "test-profile", creds)
+	err := store.Save(ctx, "test-conn", creds)
 	if err != nil {
 		t.Fatalf("Failed to save credentials: %v", err)
 	}
 
 	// Test loading credentials
-	loadedCreds, err := store.Load(ctx, "test-profile")
+	loadedCreds, err := store.Load(ctx, "test-conn")
 	if err != nil {
 		t.Fatalf("Failed to load credentials: %v", err)
 	}
@@ -91,14 +91,14 @@ func TestMockStore_SaveAndLoad(t *testing.T) {
 	}
 }
 
-// TestMockStore_LoadNonexistent tests loading a nonexistent profile
+// TestMockStore_LoadNonexistent tests loading a nonexistent connection
 func TestMockStore_LoadNonexistent(t *testing.T) {
 	store := NewMockStore()
 	ctx := context.Background()
 
 	_, err := store.Load(ctx, "nonexistent")
 	if err == nil {
-		t.Error("Expected error when loading nonexistent profile")
+		t.Error("Expected error when loading nonexistent connection")
 	}
 }
 
@@ -112,58 +112,55 @@ func TestMockStore_Delete(t *testing.T) {
 		Username: "testuser",
 		Password: "testpass",
 	}
-	if err := store.Save(ctx, "test-profile", creds); err != nil {
+	if err := store.Save(ctx, "test-conn", creds); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
 	// Delete credentials
-	err := store.Delete(ctx, "test-profile")
+	err := store.Delete(ctx, "test-conn")
 	if err != nil {
 		t.Fatalf("Failed to delete credentials: %v", err)
 	}
 
 	// Verify deletion
-	_, err = store.Load(ctx, "test-profile")
+	_, err = store.Load(ctx, "test-conn")
 	if err == nil {
 		t.Error("Expected error after deleting credentials")
 	}
 }
 
-// TestMockStore_List tests listing all profiles
+// TestMockStore_List tests listing all connections
 func TestMockStore_List(t *testing.T) {
 	store := NewMockStore()
 	ctx := context.Background()
 
-	// Add multiple profiles
-	profiles := []string{"profile1", "profile2", "profile3"}
-	for _, profile := range profiles {
-		if err := store.Save(ctx, profile, Credentials{
-			Username: profile + "-user",
+	names := []string{"conn1", "conn2", "conn3"}
+	for _, name := range names {
+		if err := store.Save(ctx, name, Credentials{
+			Username: name + "-user",
 			Password: "password",
 		}); err != nil {
-			t.Fatalf("Save(%s) failed: %v", profile, err)
+			t.Fatalf("Save(%s) failed: %v", name, err)
 		}
 	}
 
-	// List profiles
-	listedProfiles, err := store.List(ctx)
+	listed, err := store.List(ctx)
 	if err != nil {
-		t.Fatalf("Failed to list profiles: %v", err)
+		t.Fatalf("Failed to list connections: %v", err)
 	}
 
-	if len(listedProfiles) != len(profiles) {
-		t.Errorf("Expected %d profiles, got %d", len(profiles), len(listedProfiles))
+	if len(listed) != len(names) {
+		t.Errorf("Expected %d connections, got %d", len(names), len(listed))
 	}
 
-	// Verify all profiles are present
-	profileMap := make(map[string]bool)
-	for _, profile := range listedProfiles {
-		profileMap[profile] = true
+	nameMap := make(map[string]bool)
+	for _, n := range listed {
+		nameMap[n] = true
 	}
 
-	for _, profile := range profiles {
-		if !profileMap[profile] {
-			t.Errorf("Profile %s not found in list", profile)
+	for _, name := range names {
+		if !nameMap[name] {
+			t.Errorf("Connection %s not found in list", name)
 		}
 	}
 }
@@ -194,7 +191,7 @@ func TestMockStore_UpdateCredentials(t *testing.T) {
 		Username: "user1",
 		Password: "pass1",
 	}
-	if err := store.Save(ctx, "test-profile", initialCreds); err != nil {
+	if err := store.Save(ctx, "test-conn", initialCreds); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
@@ -203,12 +200,12 @@ func TestMockStore_UpdateCredentials(t *testing.T) {
 		Username: "user2",
 		Password: "pass2",
 	}
-	if err := store.Save(ctx, "test-profile", updatedCreds); err != nil {
+	if err := store.Save(ctx, "test-conn", updatedCreds); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
 	// Load and verify updated credentials
-	loadedCreds, err := store.Load(ctx, "test-profile")
+	loadedCreds, err := store.Load(ctx, "test-conn")
 	if err != nil {
 		t.Fatalf("Failed to load credentials: %v", err)
 	}

@@ -29,18 +29,18 @@ func NewSchemaCmd() *cobra.Command {
 // newListSchemasCmd creates the 'schema list-schemas' command
 func newListSchemasCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list-schemas <profile>",
+		Use:   "list-schemas <connection>",
 		Short: "List all schemas in the database",
-		Long: `List all schemas in the specified database profile.
+		Long: `List all schemas in the specified database connection.
 
 Examples:
   dbridge schema list-schemas production
   dbridge schema list-schemas local`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			profileName := args[0]
+			connName := args[0]
 
-			conn, err := getConnection(profileName)
+			conn, err := getConnection(connName)
 			if err != nil {
 				return err
 			}
@@ -72,18 +72,18 @@ func newListTablesCmd() *cobra.Command {
 	var schema string
 
 	cmd := &cobra.Command{
-		Use:   "list-tables <profile>",
+		Use:   "list-tables <connection>",
 		Short: "List all tables in a schema",
-		Long: `List all tables in the specified database profile and schema.
+		Long: `List all tables in the specified database connection and schema.
 
 Examples:
   dbridge schema list-tables production
   dbridge schema list-tables local --schema myschema`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			profileName := args[0]
+			connName := args[0]
 
-			conn, err := getConnection(profileName)
+			conn, err := getConnection(connName)
 			if err != nil {
 				return err
 			}
@@ -116,19 +116,19 @@ func newDescribeTableCmd() *cobra.Command {
 	var schema string
 
 	cmd := &cobra.Command{
-		Use:   "describe <profile> <table>",
+		Use:   "describe <connection> <table>",
 		Short: "Describe table structure",
-		Long: `Describe the structure of a table in the specified database profile.
+		Long: `Describe the structure of a table in the specified database connection.
 
 Examples:
   dbridge schema describe production users
   dbridge schema describe local orders`,
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			profileName := args[0]
+			connName := args[0]
 			tableName := args[1]
 
-			conn, err := getConnection(profileName)
+			conn, err := getConnection(connName)
 			if err != nil {
 				return err
 			}
@@ -152,28 +152,28 @@ Examples:
 }
 
 // getConnection is a helper to create a database connection
-func getConnection(profileName string) (database.Connection, error) {
-	return getConnectionWithConfig(profileName, false)
+func getConnection(connName string) (database.Connection, error) {
+	return getConnectionWithConfig(connName, false)
 }
 
-func getReadOnlyConnection(profileName string) (database.Connection, error) {
-	return getConnectionWithConfig(profileName, true)
+func getReadOnlyConnection(connName string) (database.Connection, error) {
+	return getConnectionWithConfig(connName, true)
 }
 
-func getConnectionWithConfig(profileName string, forceReadOnly bool) (database.Connection, error) {
+func getConnectionWithConfig(connName string, forceReadOnly bool) (database.Connection, error) {
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	profileConfig, err := cfg.GetProfile(profileName)
+	connCfg, err := cfg.GetConnection(connName)
 	if err != nil {
 		return nil, err
 	}
 
-	if profileConfig.Disabled {
-		return nil, fmt.Errorf("profile '%s' is disabled (enable it with: dbridge config manage)", profileName)
+	if connCfg.Disabled {
+		return nil, fmt.Errorf("connection '%s' is disabled (enable it with: dbridge config)", connName)
 	}
 
 	// Load credentials
@@ -183,24 +183,24 @@ func getConnectionWithConfig(profileName string, forceReadOnly bool) (database.C
 	}
 
 	ctx := context.Background()
-	creds, err := credStore.Load(ctx, profileName)
+	creds, err := credStore.Load(ctx, connName)
 	if err != nil {
 		creds = credentials.Credentials{
-			Username: profileConfig.Username,
+			Username: connCfg.Username,
 		}
 	}
 
-	readOnly := profileConfig.ReadOnly || forceReadOnly
+	readOnly := connCfg.ReadOnly || forceReadOnly
 
 	// Create database connection
 	connConfig := &database.ConnectionConfig{
-		Driver:   profileConfig.Driver,
-		Host:     profileConfig.Host,
-		Port:     profileConfig.Port,
-		Database: profileConfig.Database,
+		Driver:   connCfg.Driver,
+		Host:     connCfg.Host,
+		Port:     connCfg.Port,
+		Database: connCfg.Database,
 		Username: creds.Username,
 		Password: creds.Password,
-		SSLMode:  profileConfig.SSLMode,
+		SSLMode:  connCfg.SSLMode,
 		ReadOnly: readOnly,
 	}
 
