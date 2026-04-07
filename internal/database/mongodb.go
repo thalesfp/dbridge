@@ -32,7 +32,7 @@ func (d *MongoDriver) Connect(ctx context.Context, config *ConnectionConfig) (Co
 	}
 
 	if err := client.Ping(ctx, nil); err != nil {
-		client.Disconnect(ctx)
+		_ = client.Disconnect(ctx)
 		return nil, fmt.Errorf("failed to ping mongodb: %w", err)
 	}
 
