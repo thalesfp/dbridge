@@ -4,11 +4,11 @@ import "context"
 
 // Connection represents a database connection
 type Connection interface {
-	// Query executes a SELECT query
-	Query(ctx context.Context, sql string, args ...interface{}) (*QueryResult, error)
+	// Query executes a read-only query (SQL for relational databases, JSON for MongoDB)
+	Query(ctx context.Context, query string, args ...interface{}) (*QueryResult, error)
 
 	// Exec executes a write operation (INSERT, UPDATE, DELETE)
-	Exec(ctx context.Context, sql string, args ...interface{}) (*ExecResult, error)
+	Exec(ctx context.Context, query string, args ...interface{}) (*ExecResult, error)
 
 	// Schema returns schema inspection interface
 	Schema() SchemaInspector
@@ -25,7 +25,7 @@ type SchemaInspector interface {
 	ListSchemas(ctx context.Context) ([]Schema, error)
 	ListTables(ctx context.Context, schema string) ([]Table, error)
 	DescribeTable(ctx context.Context, schema, table string) (*TableDefinition, error)
-	ExplainQuery(ctx context.Context, sql string) (*ExplainResult, error)
+	ExplainQuery(ctx context.Context, query string) (*ExplainResult, error)
 }
 
 // ConnectionConfig holds connection configuration
@@ -38,4 +38,6 @@ type ConnectionConfig struct {
 	Password string
 	SSLMode  string
 	ReadOnly bool
+	URI      string
+	SRV      bool
 }

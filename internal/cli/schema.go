@@ -202,6 +202,8 @@ func getConnectionWithConfig(connName string, forceReadOnly bool) (database.Conn
 		Password: creds.Password,
 		SSLMode:  connCfg.SSLMode,
 		ReadOnly: readOnly,
+		URI:      connCfg.URI,
+		SRV:      connCfg.SRV,
 	}
 
 	conn, err := database.NewConnection(ctx, connConfig)

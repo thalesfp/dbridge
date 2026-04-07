@@ -49,6 +49,8 @@ type Connection struct {
 	SSLMode  string `mapstructure:"ssl_mode" yaml:"ssl_mode"`
 	ReadOnly bool   `mapstructure:"readonly" yaml:"readonly"` // Always true for now (v1.0 is read-only)
 	Disabled bool   `mapstructure:"disabled" yaml:"disabled"`
+	URI      string `mapstructure:"uri" yaml:"uri,omitempty"` // Full connection URI (e.g. mongodb+srv://...), overrides host/port/ssl
+	SRV      bool   `mapstructure:"srv" yaml:"srv,omitempty"` // Use mongodb+srv:// scheme (MongoDB only)
 }
 
 // DriverDefaults holds default port and SSL mode for a database driver.
@@ -60,6 +62,7 @@ type DriverDefaults struct {
 var driverDefaults = map[string]DriverDefaults{
 	"postgres": {5432, "require"},
 	"mysql":    {3306, "preferred"},
+	"mongodb":  {27017, "disable"},
 }
 
 // DriverDefaultsMap returns the driver defaults map for external use.

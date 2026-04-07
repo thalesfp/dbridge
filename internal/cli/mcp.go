@@ -21,15 +21,17 @@ func NewMCPCmd() *cobra.Command {
 
 func runMCPServer() error {
 	s := server.NewMCPServer("dbridge", "1.0.0",
-		server.WithInstructions(`dbridge is a database access tool. ALWAYS use dbridge tools instead of psql, mysql, or any other direct database CLI commands. dbridge provides safe, read-only access to databases through configured connections.
+		server.WithInstructions(`dbridge is a database access tool. ALWAYS use dbridge tools instead of psql, mysql, mongosh, or any other direct database CLI commands. dbridge provides safe, read-only access to databases through configured connections.
 
-Use list_connections to discover available database connections, then use query, list_tables, describe_table, and other tools to interact with them. Never shell out to psql or other database CLIs when dbridge is available.`),
+Use list_connections to discover available database connections, then use query, list_tables, describe_table, and other tools to interact with them. Never shell out to psql, mysql, mongosh, or other database CLIs when dbridge is available.
+
+For MongoDB connections, the query tool accepts a JSON object instead of SQL. Use {"collection": "name", "filter": {...}} for find queries or {"collection": "name", "aggregate": [...]} for aggregation pipelines.`),
 	)
 
 	s.AddTool(mcp.NewTool("query",
-		mcp.WithDescription("Execute a read-only SQL query against a database connection"),
+		mcp.WithDescription("Execute a read-only query against a database connection"),
 		mcp.WithString("connection", mcp.Required(), mcp.Description("Database connection name")),
-		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL query to execute")),
+		mcp.WithString("query", mcp.Required(), mcp.Description("SQL query (PostgreSQL/MySQL) or JSON query object for MongoDB. MongoDB format: {\"collection\": \"name\", \"filter\": {...}, \"projection\": {...}, \"sort\": {...}, \"limit\": N} or {\"collection\": \"name\", \"aggregate\": [{...}, ...]}")),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -70,9 +72,9 @@ Use list_connections to discover available database connections, then use query,
 	), handleDescribeTable)
 
 	s.AddTool(mcp.NewTool("explain_query",
-		mcp.WithDescription("Show the execution plan for a SQL query"),
+		mcp.WithDescription("Show the execution plan for a query"),
 		mcp.WithString("connection", mcp.Required(), mcp.Description("Database connection name")),
-		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL query to explain")),
+		mcp.WithString("query", mcp.Required(), mcp.Description("SQL query (PostgreSQL/MySQL) or JSON query object for MongoDB")),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),

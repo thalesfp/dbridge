@@ -218,6 +218,7 @@ Examples:
 					Username: connData.Username,
 					SSLMode:  connData.SSLMode,
 					ReadOnly: true,
+					SRV:      connData.SRV,
 				}
 
 				credStore, err := credentials.NewStore("dbridge")
@@ -615,6 +616,7 @@ Examples:
 				Username: sourceConn.Username,
 				SSLMode:  sourceConn.SSLMode,
 				Password: sourcePassword,
+				SRV:      sourceConn.SRV,
 			}, testConnectionOption(), form.WithSave(saveConnectionCallback))
 
 			return err
@@ -663,6 +665,7 @@ func runEditFlow(cfg *config.Config, connName string) error {
 			SSLMode:  d.SSLMode,
 			ReadOnly: true,
 			Disabled: existingConn.Disabled,
+			SRV:      d.SRV,
 		}
 
 		if d.Password != "" {
@@ -692,6 +695,7 @@ func runEditFlow(cfg *config.Config, connName string) error {
 		Username: existingConn.Username,
 		SSLMode:  existingConn.SSLMode,
 		Password: existingPassword,
+		SRV:      existingConn.SRV,
 	}, testConnectionOption(), form.WithSave(editSaveFn))
 
 	return err
@@ -750,8 +754,8 @@ func (r *connectionTestResult) toMap() map[string]interface{} {
 
 // testConnectionOption returns a FormOption that adds inline connection testing via ctrl+t.
 func testConnectionOption() form.FormOption {
-	return form.WithTestConnection(func(d *form.ConnectionData) string {
-		result := runConnectionTest(context.Background(), d)
+	return form.WithTestConnection(func(ctx context.Context, d *form.ConnectionData) string {
+		result := runConnectionTest(ctx, d)
 		if result.Success {
 			return ""
 		}
@@ -770,6 +774,7 @@ func runConnectionTest(ctx context.Context, data *form.ConnectionData) *connecti
 		Password: data.Password,
 		SSLMode:  data.SSLMode,
 		ReadOnly: true,
+		SRV:      data.SRV,
 	}
 	conn, err := dbpkg.NewConnection(ctx, connConfig)
 	if err != nil {

@@ -14,7 +14,7 @@ func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	sql, err := request.RequireString("sql")
+	query, err := request.RequireString("query")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -25,7 +25,7 @@ func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	}
 	defer conn.Close(ctx)
 
-	result, err := conn.Query(ctx, sql)
+	result, err := conn.Query(ctx, query)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -185,7 +185,7 @@ func handleExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	sql, err := request.RequireString("sql")
+	query, err := request.RequireString("query")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -196,7 +196,7 @@ func handleExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 	defer conn.Close(ctx)
 
-	plan, err := conn.Schema().ExplainQuery(ctx, sql)
+	plan, err := conn.Schema().ExplainQuery(ctx, query)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

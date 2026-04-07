@@ -1,6 +1,7 @@
 package form
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -36,6 +37,10 @@ var (
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("214")).
 				Padding(1, 3)
+	formDialogTesting  = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorAccent).
+				Padding(1, 3)
 	formDialogTitle    = lipgloss.NewStyle().Bold(true)
 	formDialogHintStyle = lipgloss.NewStyle().Foreground(colorDim)
 )
@@ -52,16 +57,23 @@ const (
 	fieldSelect
 )
 
-// Field indices (main screen — no password)
+// Field labels used for lookup
 const (
-	fDriver   = 0
-	fName     = 1
-	fDatabase = 2
-	fHost     = 3
-	fPort     = 4
-	fUsername  = 5
-	fSSLMode  = 6
-	fieldCount = 7
+	labelDriver   = "Driver"
+	labelMode     = "Mode"
+	labelDatabase = "Database"
+	labelHost     = "Host"
+	labelPort     = "Port"
+	labelName     = "Name"
+	labelUsername  = "Username"
+	labelPassword  = "Password"
+	labelSSLMode  = "SSL Mode"
+)
+
+// Mode values for MongoDB connection
+const (
+	modeStandard = "standard"
+	modeSRV      = "srv"
 )
 
 type formField struct {
@@ -77,8 +89,9 @@ type formField struct {
 type FormOption func(*connectionFormModel)
 
 // WithTestConnection adds a "test connection" keybind (ctrl+t) to the form.
-// The callback receives current field values and returns "" on success or an error message.
-func WithTestConnection(fn func(*ConnectionData) string) FormOption {
+// The callback receives a context and current field values, and returns "" on success or an error message.
+// The context is cancelled if the user presses esc during testing.
+func WithTestConnection(fn func(context.Context, *ConnectionData) string) FormOption {
 	return func(m *connectionFormModel) {
 		m.testFn = fn
 	}
@@ -109,18 +122,32 @@ type connectionFormModel struct {
 	origPw     string
 
 	// Callbacks
-	testFn func(*ConnectionData) string
+	testFn func(context.Context, *ConnectionData) string
 	saveFn func(*ConnectionData) string
+
+	// Connection test state
+	testing      bool
+	testCancel   context.CancelFunc
+	testGen      int
 
 	// Dialog overlay
 	dialogMsg string // non-empty = show centered dialog
 	dialogOk  bool   // true = success style, false = failure style
 	saved     bool   // true = dismiss dialog should quit
 
-	editMode bool
-	defaults *ConnectionData
-	width    int
-	height   int
+	editMode    bool
+	defaults    *ConnectionData
+	lastDriver  string
+	width       int
+	height      int
+}
+
+func (m *connectionFormModel) cancelTest() {
+	if m.testCancel != nil {
+		m.testCancel()
+		m.testCancel = nil
+	}
+	m.testing = false
 }
 
 func newTextInput(placeholder string, value string) textinput.Model {
@@ -143,17 +170,158 @@ func newPasswordInput(placeholder string, value string) textinput.Model {
 	return ti
 }
 
+func (m *connectionFormModel) fieldByLabel(label string) *formField {
+	for i := range m.fields {
+		if m.fields[i].label == label {
+			return &m.fields[i]
+		}
+	}
+	return nil
+}
+
+func (m *connectionFormModel) fieldValue(label string) string {
+	f := m.fieldByLabel(label)
+	if f == nil {
+		return ""
+	}
+	if f.kind == fieldSelect {
+		return f.options[f.selected].value
+	}
+	return f.input.Value()
+}
+
+func selectIdxForValue(opts []selectOption, val string) int {
+	for i, o := range opts {
+		if o.value == val {
+			return i
+		}
+	}
+	return 0
+}
+
+func sslOptions(driver string) []selectOption {
+	if driver == "mysql" {
+		return []selectOption{
+			{"Disable", "disable"}, {"Preferred", "preferred"}, {"Require", "require"},
+		}
+	}
+	return []selectOption{
+		{"Disable", "disable"}, {"Prefer", "prefer"}, {"Require", "require"},
+	}
+}
+
+func driverOptions() []selectOption {
+	return []selectOption{
+		{"PostgreSQL", "postgres"}, {"MySQL", "mysql"}, {"MongoDB", "mongodb"},
+	}
+}
+
+func modeOptions() []selectOption {
+	return []selectOption{
+		{"mongodb://", modeStandard}, {"mongodb+srv://", modeSRV},
+	}
+}
+
+func buildFields(driver, mode string, vals map[string]string, isEdit bool) []formField {
+	driverOpts := driverOptions()
+	sslOpts := sslOptions(driver)
+
+	fields := []formField{
+		{kind: fieldSelect, label: labelDriver, options: driverOpts, selected: selectIdxForValue(driverOpts, driver)},
+	}
+
+	if driver == "mongodb" {
+		modeOpts := modeOptions()
+		fields = append(fields, formField{kind: fieldSelect, label: labelMode, options: modeOpts, selected: selectIdxForValue(modeOpts, mode)})
+	}
+
+	fields = append(fields,
+		formField{kind: fieldText, label: labelDatabase, input: newTextInput("myapp", vals[labelDatabase]), validate: validateNotEmpty("Database")},
+		formField{kind: fieldText, label: labelHost, input: newTextInput("localhost", vals[labelHost]), validate: validateNotEmpty("Host")},
+	)
+
+	if driver != "mongodb" || mode != modeSRV {
+		fields = append(fields, formField{kind: fieldText, label: labelPort, input: newTextInput("5432", vals[labelPort]), validate: validatePort})
+	}
+
+	fields = append(fields,
+		formField{kind: fieldText, label: labelName, input: newTextInput("production-db", vals[labelName]), validate: validateConnectionName},
+		formField{kind: fieldText, label: labelUsername, input: newTextInput("postgres", vals[labelUsername]), validate: validateNotEmpty("Username")},
+	)
+
+	if !isEdit {
+		fields = append(fields, formField{kind: fieldText, label: labelPassword, input: newPasswordInput("optional", vals[labelPassword])})
+	}
+
+	fields = append(fields, formField{kind: fieldSelect, label: labelSSLMode, options: sslOpts, selected: selectIdxForValue(sslOpts, vals[labelSSLMode])})
+
+	return fields
+}
+
+func (m *connectionFormModel) snapshotValues() map[string]string {
+	vals := map[string]string{}
+	for i := range m.fields {
+		f := &m.fields[i]
+		switch f.kind {
+		case fieldText:
+			vals[f.label] = f.input.Value()
+		case fieldSelect:
+			vals[f.label] = f.options[f.selected].value
+		}
+	}
+	return vals
+}
+
+func (m *connectionFormModel) onSelectChanged(f *formField) {
+	if f.label == labelDriver || f.label == labelMode {
+		m.rebuildFields(m.fieldValue(labelDriver), m.fieldValue(labelMode))
+	}
+}
+
+func (m *connectionFormModel) rebuildFields(driver, mode string) {
+	vals := m.snapshotValues()
+
+	if driver != m.lastDriver {
+		defaults, ok := config.DriverDefaultsMap()[driver]
+		oldDefaults, oldOk := config.DriverDefaultsMap()[m.lastDriver]
+
+		if ok {
+			if !oldOk || vals[labelPort] == strconv.Itoa(oldDefaults.Port) {
+				vals[labelPort] = strconv.Itoa(defaults.Port)
+			}
+			if !oldOk || vals[labelSSLMode] == oldDefaults.SSLMode {
+				vals[labelSSLMode] = defaults.SSLMode
+			}
+		}
+
+		m.lastDriver = driver
+	}
+
+	if vals[labelPort] == "" {
+		if defaults, ok := config.DriverDefaultsMap()[driver]; ok {
+			vals[labelPort] = strconv.Itoa(defaults.Port)
+		}
+	}
+
+	m.fields = buildFields(driver, mode, vals, m.editMode)
+
+	if m.focusIndex >= len(m.fields) {
+		m.focusIndex = len(m.fields) - 1
+	}
+
+	m.focusField(m.focusIndex)
+}
+
 func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
-	// Start with creation defaults
+	pgDefaults := config.DriverDefaultsMap()["postgres"]
 	data := &ConnectionData{
 		Driver:  "postgres",
 		Host:    "localhost",
-		Port:    5432,
-		SSLMode: "prefer",
+		Port:    pgDefaults.Port,
+		SSLMode: pgDefaults.SSLMode,
 	}
 	origPw := ""
 	if initial != nil {
-		// Merge: only override fields that have non-zero values
 		if initial.Driver != "" {
 			data.Driver = initial.Driver
 		}
@@ -172,20 +340,8 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 			data.SSLMode = initial.SSLMode
 		}
 		data.Password = initial.Password
+		data.SRV = initial.SRV
 		origPw = initial.Password
-	}
-
-	driverIdx := 0
-	if data.Driver == "mysql" {
-		driverIdx = 1
-	}
-
-	sslIdx := 1 // prefer
-	switch data.SSLMode {
-	case "disable":
-		sslIdx = 0
-	case "require":
-		sslIdx = 2
 	}
 
 	portStr := strconv.Itoa(data.Port)
@@ -193,31 +349,24 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 		portStr = "5432"
 	}
 
-	fields := []formField{
-		{kind: fieldSelect, label: "Driver", options: []selectOption{
-			{"PostgreSQL", "postgres"}, {"MySQL", "mysql"},
-		}, selected: driverIdx},
-		{kind: fieldText, label: "Name", input: newTextInput("production-db", data.Name), validate: validateConnectionName},
-		{kind: fieldText, label: "Database", input: newTextInput("myapp", data.Database), validate: validateNotEmpty("Database")},
-		{kind: fieldText, label: "Host", input: newTextInput("localhost", data.Host), validate: validateNotEmpty("Host")},
-		{kind: fieldText, label: "Port", input: newTextInput("5432", portStr), validate: validatePort},
-		{kind: fieldText, label: "Username", input: newTextInput("postgres", data.Username), validate: validateNotEmpty("Username")},
-		{kind: fieldSelect, label: "SSL Mode", options: []selectOption{
-			{"Disable", "disable"}, {"Prefer", "prefer"}, {"Require", "require"},
-		}, selected: sslIdx},
+	mode := modeStandard
+	if data.SRV {
+		mode = modeSRV
 	}
 
-	// Edit mode if initial has a host set (not just a name for creation)
 	isEdit := initial != nil && initial.Host != ""
 
-	// In add mode, password is an inline field; in edit mode, it's a separate screen
-	if !isEdit {
-		fields = append(fields, formField{
-			kind:  fieldText,
-			label: "Password",
-			input: newPasswordInput("optional", data.Password),
-		})
+	vals := map[string]string{
+		labelDatabase: data.Database,
+		labelHost:     data.Host,
+		labelPort:     portStr,
+		labelName:     data.Name,
+		labelUsername:  data.Username,
+		labelPassword:  data.Password,
+		labelSSLMode:  data.SSLMode,
 	}
+
+	fields := buildFields(data.Driver, mode, vals, isEdit)
 
 	return connectionFormModel{
 		fields:     fields,
@@ -226,7 +375,13 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 		origPw:     origPw,
 		editMode:   isEdit,
 		defaults:   data,
+		lastDriver: data.Driver,
 	}
+}
+
+type testConnectionResultMsg struct {
+	err string // "" means success
+	gen int
 }
 
 func (m connectionFormModel) Init() tea.Cmd {
@@ -240,7 +395,33 @@ func (m connectionFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
+	case testConnectionResultMsg:
+		if !m.testing || msg.gen != m.testGen {
+			return m, nil
+		}
+		m.cancelTest()
+		if msg.err == "" {
+			m.dialogMsg = "✓ Connection successful"
+			m.dialogOk = true
+		} else {
+			m.dialogMsg = "⚠ " + msg.err
+			m.dialogOk = false
+		}
+		return m, nil
+
 	case tea.KeyMsg:
+		if m.testing {
+			switch msg.String() {
+			case "ctrl+c":
+				m.cancelTest()
+				m.cancelled = true
+				return m, tea.Quit
+			case "esc":
+				m.cancelTest()
+			}
+			return m, nil
+		}
+
 		// Dismiss dialog overlay on any key
 		if m.dialogMsg != "" {
 			if m.saved {
@@ -314,17 +495,17 @@ func (m connectionFormModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		f := &m.fields[m.focusIndex]
 		if f.kind == fieldSelect && f.selected > 0 {
 			f.selected--
+			m.onSelectChanged(f)
 			return m, nil
 		}
-		// Fall through to text input forwarding for cursor movement
 
 	case "right":
 		f := &m.fields[m.focusIndex]
 		if f.kind == fieldSelect && f.selected < len(f.options)-1 {
 			f.selected++
+			m.onSelectChanged(f)
 			return m, nil
 		}
-		// Fall through to text input forwarding for cursor movement
 
 	case "ctrl+p":
 		if m.editMode {
@@ -335,15 +516,18 @@ func (m connectionFormModel) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+t":
 		if m.testFn != nil {
 			data := m.toConnectionData()
-			result := m.testFn(data)
-			if result == "" {
-				m.dialogMsg = "✓ Connection successful"
-				m.dialogOk = true
-			} else {
-				m.dialogMsg = "⚠ " + result
-				m.dialogOk = false
-			}
+			ctx, cancel := context.WithCancel(context.Background())
+			m.testGen++
+			m.testing = true
+			m.testCancel = cancel
 			m.err = ""
+			testFn := m.testFn
+			gen := m.testGen
+			cmd := func() tea.Msg {
+				result := testFn(ctx, data)
+				return testConnectionResultMsg{err: result, gen: gen}
+			}
+			return m, cmd
 		}
 		return m, nil
 
@@ -477,33 +661,40 @@ func (m connectionFormModel) validateAll() string {
 	return ""
 }
 
+func (m connectionFormModel) renderOverlay(style lipgloss.Style, title string, titleColor lipgloss.Color, hint string) string {
+	dialog := formDialogTitle.Foreground(titleColor).Render(title) +
+		"\n\n" +
+		formDialogHintStyle.Render(hint)
+	box := style.Render(dialog)
+
+	w := m.width
+	h := m.height
+	if w == 0 {
+		w = 60
+	}
+	if h == 0 {
+		h = 20
+	}
+	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box)
+}
+
 func (m connectionFormModel) View() string {
 	if m.submitted || m.cancelled {
 		return ""
 	}
 
-	// Dialog overlay takes priority over all views
+	if m.testing {
+		return m.renderOverlay(formDialogTesting, "Testing connection...", colorAccent, "esc to cancel")
+	}
+
 	if m.dialogMsg != "" {
 		style := formDialogFail
-		titleStyle := formDialogTitle.Foreground(lipgloss.Color("214"))
+		titleColor := lipgloss.Color("214")
 		if m.dialogOk {
 			style = formDialogSuccess
-			titleStyle = formDialogTitle.Foreground(lipgloss.Color("82"))
+			titleColor = lipgloss.Color("82")
 		}
-		dialog := titleStyle.Render(m.dialogMsg) +
-			"\n\n" +
-			formDialogHintStyle.Render("press any key to continue")
-		box := style.Render(dialog)
-
-		w := m.width
-		h := m.height
-		if w == 0 {
-			w = 60
-		}
-		if h == 0 {
-			h = 20
-		}
-		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box)
+		return m.renderOverlay(style, m.dialogMsg, titleColor, "press any key to continue")
 	}
 
 	if m.editingPw {
@@ -626,49 +817,28 @@ func (m connectionFormModel) renderSelect(f *formField, active bool) string {
 }
 
 func (m connectionFormModel) toConnectionData() *ConnectionData {
-	port, _ := strconv.Atoi(m.fields[fPort].input.Value())
+	port, _ := strconv.Atoi(m.fieldValue(labelPort))
 
-	driver := m.fields[fDriver].options[m.fields[fDriver].selected].value
-	sslMode := m.fields[fSSLMode].options[m.fields[fSSLMode].selected].value
+	driver := m.fieldValue(labelDriver)
+	sslMode := m.fieldValue(labelSSLMode)
+	mode := m.fieldValue(labelMode)
 
-	// In add mode, password comes from the inline field; in edit mode, from m.password
 	pw := m.password
-	if !m.editMode && len(m.fields) > fSSLMode+1 {
-		pw = m.fields[fSSLMode+1].input.Value()
+	if !m.editMode {
+		pw = m.fieldValue(labelPassword)
 	}
 
-	data := &ConnectionData{
+	return &ConnectionData{
 		Driver:   driver,
-		Name:     m.fields[fName].input.Value(),
-		Database: m.fields[fDatabase].input.Value(),
-		Host:     m.fields[fHost].input.Value(),
+		Name:     m.fieldValue(labelName),
+		Database: m.fieldValue(labelDatabase),
+		Host:     m.fieldValue(labelHost),
 		Port:     port,
-		Username: m.fields[fUsername].input.Value(),
+		Username: m.fieldValue(labelUsername),
 		SSLMode:  sslMode,
 		Password: pw,
+		SRV:      mode == modeSRV,
 	}
-
-	origDriver := "postgres"
-	origPort := 5432
-	origSSL := "prefer"
-	if m.defaults != nil {
-		origDriver = m.defaults.Driver
-		origPort = m.defaults.Port
-		origSSL = m.defaults.SSLMode
-	}
-
-	if data.Driver != origDriver {
-		if defaults, ok := config.DriverDefaultsMap()[data.Driver]; ok {
-			if data.Port == origPort {
-				data.Port = defaults.Port
-			}
-			if data.SSLMode == origSSL {
-				data.SSLMode = defaults.SSLMode
-			}
-		}
-	}
-
-	return data
 }
 
 // RunConnectionForm runs the interactive connection form.

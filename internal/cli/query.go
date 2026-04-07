@@ -68,6 +68,8 @@ Examples:
 				Password: creds.Password,
 				SSLMode:  connCfg.SSLMode,
 				ReadOnly: connCfg.ReadOnly,
+				URI:      connCfg.URI,
+				SRV:      connCfg.SRV,
 			}
 
 			conn, err := database.NewConnection(ctx, connConfig)

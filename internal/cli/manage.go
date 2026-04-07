@@ -311,6 +311,7 @@ func saveConnectionCallback(d *form.ConnectionData) string {
 		Username: d.Username,
 		SSLMode:  d.SSLMode,
 		ReadOnly: true,
+		SRV:      d.SRV,
 	}
 
 	if d.Password != "" {

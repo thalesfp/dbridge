@@ -113,6 +113,25 @@ services:
     networks:
       - dbridge-test
 
+  dbridge-mongo:
+    image: mongo:7
+    container_name: dbridge-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dbridge
+      MONGO_INITDB_ROOT_PASSWORD: dbridge
+      MONGO_INITDB_DATABASE: dbridge_test
+    ports:
+      - "27040:27017"
+    volumes:
+      - ./test/fixtures/mongo_sample_data.js:/docker-entrypoint-initdb.d/01_sample_data.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "-u", "dbridge", "-p", "dbridge", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - dbridge-test
+
 networks:
   dbridge-test:
     driver: bridge

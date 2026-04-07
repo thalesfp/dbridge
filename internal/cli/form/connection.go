@@ -16,6 +16,7 @@ type ConnectionData struct {
 	Username string
 	SSLMode  string
 	Password string
+	SRV      bool
 }
 
 // Validation functions

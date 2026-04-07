@@ -4,7 +4,7 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 
 ## Features
 
-- **Multi-Database Support**: PostgreSQL, MySQL
+- **Multi-Database Support**: PostgreSQL, MySQL, MongoDB
 - **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) — passwords never stored in config files or logs
 - **Multi-Connection Management**: Manage multiple database connections with named connections
 - **Multiple Output Formats**: Compact JSON (token-efficient for AI agents), table, and CSV
@@ -46,7 +46,7 @@ make clean            # Remove build artifacts
 ### Dependencies
 
 - Go 1.24+
-- PostgreSQL 12+ and/or MySQL 8.0+ (depending on which databases you connect to)
+- PostgreSQL 12+, MySQL 8.0+, and/or MongoDB 4.4+ (depending on which databases you connect to)
 
 ## Quick Start
 
@@ -74,6 +74,21 @@ dbridge query local "SELECT email FROM users LIMIT 3"
 # Multi-column result
 dbridge query local "SELECT id, name, active FROM users LIMIT 2"
 # Output: {"cols":["id","name","active"],"rows":[[1,"Alice",true],[2,"Bob",false]]}
+```
+
+### MongoDB Queries
+
+For MongoDB connections, the `query` tool accepts a JSON object instead of SQL:
+
+```bash
+# Find documents
+dbridge query mongo '{"collection": "users", "filter": {"active": true}, "limit": 5}'
+
+# With projection and sort
+dbridge query mongo '{"collection": "users", "filter": {}, "projection": {"name": 1, "email": 1}, "sort": {"name": 1}}'
+
+# Aggregation pipeline
+dbridge query mongo '{"collection": "orders", "aggregate": [{"$match": {"status": "completed"}}, {"$group": {"_id": "$product", "total": {"$sum": "$amount"}}}]}'
 ```
 
 ### 3. Manage Connections
@@ -130,7 +145,7 @@ codex mcp add dbridge -- /path/to/dbridge mcp
 
 | Tool | Description |
 |------|-------------|
-| `query` | Execute a read-only SQL query |
+| `query` | Execute a read-only query (SQL or MongoDB JSON) |
 | `list_connections` | List configured database connections |
 | `list_schemas` | List schemas in a database |
 | `list_tables` | List tables in a schema |
@@ -159,6 +174,24 @@ connections:
     ssl_mode: "prefer"
     readonly: false
     # Password stored in OS Keychain
+
+  # MongoDB (standard)
+  mongo-local:
+    driver: "mongodb"
+    host: "localhost"
+    port: 27017
+    database: "myapp"
+    username: "admin"
+    ssl_mode: "disable"
+
+  # MongoDB (SRV / Atlas)
+  mongo-atlas:
+    driver: "mongodb"
+    host: "cluster.example.mongodb.net"
+    database: "myapp"
+    username: "admin"
+    ssl_mode: "require"
+    srv: true
 ```
 
 ## Credential Storage
