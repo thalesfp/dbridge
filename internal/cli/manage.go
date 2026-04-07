@@ -229,9 +229,10 @@ func (m manageModel) View() string {
 
 		name := manageNameStyle.Render(fmt.Sprintf("%-*s", m.maxName, item.name))
 		driver := HelpStyle.Render(driverShort(item.conn.Driver))
+		env := HelpStyle.Render(item.conn.Environment)
 		connStr := HelpStyle.Render(fmt.Sprintf("%s:%d/%s", item.conn.Host, item.conn.Port, item.conn.Database))
 
-		b.WriteString(fmt.Sprintf("  %s%s %s  %s  %s\n", cursor, icon, name, driver, connStr))
+		b.WriteString(fmt.Sprintf("  %s%s %s  %s  %s  %s\n", cursor, icon, name, driver, env, connStr))
 	}
 
 	b.WriteString("\n")
@@ -303,15 +304,17 @@ func saveConnectionCallback(d *form.ConnectionData) string {
 	}
 
 	conn := &config.Connection{
-		Driver:   d.Driver,
-		Name:     d.Name,
-		Host:     d.Host,
-		Port:     d.Port,
-		Database: d.Database,
-		Username: d.Username,
-		SSLMode:  d.SSLMode,
-		ReadOnly: true,
-		SRV:      d.SRV,
+		Driver:      d.Driver,
+		Name:        d.Name,
+		Host:        d.Host,
+		Port:        d.Port,
+		Database:    d.Database,
+		Username:    d.Username,
+		SSLMode:     d.SSLMode,
+		ReadOnly:    true,
+		SRV:         d.SRV,
+		Environment: d.Environment,
+		Description: d.Description,
 	}
 
 	if d.Password != "" {

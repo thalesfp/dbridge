@@ -61,6 +61,8 @@ func newConfigAddCmd() *cobra.Command {
 		sslMode        string
 		readOnly       bool
 		testConnection bool
+		environment    string
+		description    string
 	)
 
 	cmd := &cobra.Command{
@@ -179,14 +181,16 @@ Examples:
 				}
 
 				connData = &form.ConnectionData{
-					Driver:   driver,
-					Name:     connName,
-					Host:     host,
-					Port:     port,
-					Database: database,
-					Username: username,
-					SSLMode:  sslMode,
-					Password: password,
+					Driver:      driver,
+					Name:        connName,
+					Host:        host,
+					Port:        port,
+					Database:    database,
+					Username:    username,
+					SSLMode:     sslMode,
+					Password:    password,
+					Environment: environment,
+					Description: description,
 				}
 			} else {
 				// Interactive TUI mode — form handles saving via WithSave
@@ -210,15 +214,17 @@ Examples:
 				}
 
 				connCfg := &config.Connection{
-					Driver:   connData.Driver,
-					Name:     connData.Name,
-					Host:     connData.Host,
-					Port:     connData.Port,
-					Database: connData.Database,
-					Username: connData.Username,
-					SSLMode:  connData.SSLMode,
-					ReadOnly: true,
-					SRV:      connData.SRV,
+					Driver:      connData.Driver,
+					Name:        connData.Name,
+					Host:        connData.Host,
+					Port:        connData.Port,
+					Database:    connData.Database,
+					Username:    connData.Username,
+					SSLMode:     connData.SSLMode,
+					ReadOnly:    true,
+					SRV:         connData.SRV,
+					Environment: connData.Environment,
+					Description: connData.Description,
 				}
 
 				credStore, err := credentials.NewStore("dbridge")
@@ -313,6 +319,8 @@ Examples:
 	cmd.Flags().StringVar(&sslMode, "ssl-mode", "", "SSL mode (default: driver-specific)")
 	cmd.Flags().BoolVar(&readOnly, "readonly", true, "Read-only mode")
 	cmd.Flags().BoolVar(&testConnection, "test-connection", false, "Test the database connection after adding")
+	cmd.Flags().StringVar(&environment, "environment", "production", "Environment (production, staging, development, local)")
+	cmd.Flags().StringVar(&description, "description", "", "Connection description")
 
 	return cmd
 }
@@ -383,18 +391,23 @@ func newConfigListCmd() *cobra.Command {
 					if driver == "" {
 						driver = "postgres"
 					}
-					connections = append(connections, map[string]interface{}{
-						"name":     name,
-						"driver":   driver,
-						"disabled": conn.Disabled,
-					})
+					entry := map[string]interface{}{
+						"name":        name,
+						"driver":      driver,
+						"disabled":    conn.Disabled,
+						"environment": conn.Environment,
+					}
+					if conn.Description != "" {
+						entry["description"] = conn.Description
+					}
+					connections = append(connections, entry)
 				}
 				return formatter.Success("config_list", map[string]interface{}{
 					"connections": connections,
 				}, fmt.Sprintf("Found %d connection(s)", len(names)))
 			}
 
-			fmt.Printf("  %-30s %-12s %s\n", "NAME", "DRIVER", "STATUS")
+			fmt.Printf("  %-30s %-12s %-14s %-10s %s\n", "NAME", "DRIVER", "ENV", "STATUS", "DESCRIPTION")
 			for _, name := range names {
 				conn := cfg.Connections[name]
 				driver := conn.Driver
@@ -402,12 +415,22 @@ func newConfigListCmd() *cobra.Command {
 					driver = "postgres"
 				}
 
+				env := conn.Environment
+				if env == "" {
+					env = "-"
+				}
+
 				status := "enabled"
 				if conn.Disabled {
 					status = "disabled"
 				}
 
-				fmt.Printf("  %-30s %-12s %s\n", name, driver, status)
+				desc := conn.Description
+				if desc == "" {
+					desc = "-"
+				}
+
+				fmt.Printf("  %-30s %-12s %-14s %-10s %s\n", name, driver, env, status, desc)
 			}
 
 			return nil
@@ -536,15 +559,17 @@ Examples:
 
 			// Launch form pre-filled with source connection data
 			_, err = form.RunConnectionForm(&form.ConnectionData{
-				Driver:   sourceConn.Driver,
-				Name:     newConnName,
-				Database: sourceConn.Database,
-				Host:     sourceConn.Host,
-				Port:     sourceConn.Port,
-				Username: sourceConn.Username,
-				SSLMode:  sourceConn.SSLMode,
-				Password: sourcePassword,
-				SRV:      sourceConn.SRV,
+				Driver:      sourceConn.Driver,
+				Name:        newConnName,
+				Database:    sourceConn.Database,
+				Host:        sourceConn.Host,
+				Port:        sourceConn.Port,
+				Username:    sourceConn.Username,
+				SSLMode:     sourceConn.SSLMode,
+				Password:    sourcePassword,
+				SRV:         sourceConn.SRV,
+				Environment: sourceConn.Environment,
+				Description: sourceConn.Description,
 			}, testConnectionOption(), form.WithSave(saveConnectionCallback))
 
 			return err
@@ -584,16 +609,18 @@ func runEditFlow(cfg *config.Config, connName string) error {
 		}
 
 		updatedConn := &config.Connection{
-			Driver:   d.Driver,
-			Name:     d.Name,
-			Host:     d.Host,
-			Port:     d.Port,
-			Database: d.Database,
-			Username: d.Username,
-			SSLMode:  d.SSLMode,
-			ReadOnly: true,
-			Disabled: existingConn.Disabled,
-			SRV:      d.SRV,
+			Driver:      d.Driver,
+			Name:        d.Name,
+			Host:        d.Host,
+			Port:        d.Port,
+			Database:    d.Database,
+			Username:    d.Username,
+			SSLMode:     d.SSLMode,
+			ReadOnly:    true,
+			Disabled:    existingConn.Disabled,
+			SRV:         d.SRV,
+			Environment: d.Environment,
+			Description: d.Description,
 		}
 
 		if d.Password != "" {
@@ -615,15 +642,17 @@ func runEditFlow(cfg *config.Config, connName string) error {
 	}
 
 	_, err = form.RunConnectionForm(&form.ConnectionData{
-		Driver:   existingConn.Driver,
-		Name:     existingConn.Name,
-		Database: existingConn.Database,
-		Host:     existingConn.Host,
-		Port:     existingConn.Port,
-		Username: existingConn.Username,
-		SSLMode:  existingConn.SSLMode,
-		Password: existingPassword,
-		SRV:      existingConn.SRV,
+		Driver:      existingConn.Driver,
+		Name:        existingConn.Name,
+		Database:    existingConn.Database,
+		Host:        existingConn.Host,
+		Port:        existingConn.Port,
+		Username:    existingConn.Username,
+		SSLMode:     existingConn.SSLMode,
+		Password:    existingPassword,
+		SRV:         existingConn.SRV,
+		Environment: existingConn.Environment,
+		Description: existingConn.Description,
 	}, testConnectionOption(), form.WithSave(editSaveFn))
 
 	return err

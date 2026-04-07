@@ -8,15 +8,17 @@ import (
 
 // ConnectionData holds the form input values
 type ConnectionData struct {
-	Driver   string
-	Name     string
-	Database string
-	Host     string
-	Port     int
-	Username string
-	SSLMode  string
-	Password string
-	SRV      bool
+	Driver      string
+	Name        string
+	Database    string
+	Host        string
+	Port        int
+	Username    string
+	SSLMode     string
+	Password    string
+	SRV         bool
+	Environment string
+	Description string
 }
 
 // Validation functions

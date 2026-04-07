@@ -68,6 +68,8 @@ const (
 	labelUsername  = "Username"
 	labelPassword  = "Password"
 	labelSSLMode  = "SSL Mode"
+	labelEnv      = "Environment"
+	labelDesc     = "Description"
 )
 
 // Mode values for MongoDB connection
@@ -222,6 +224,12 @@ func modeOptions() []selectOption {
 	}
 }
 
+func envOptions() []selectOption {
+	return []selectOption{
+		{"production", "production"}, {"staging", "staging"}, {"development", "development"}, {"local", "local"},
+	}
+}
+
 func buildFields(driver, mode string, vals map[string]string, isEdit bool) []formField {
 	driverOpts := driverOptions()
 	sslOpts := sslOptions(driver)
@@ -235,8 +243,12 @@ func buildFields(driver, mode string, vals map[string]string, isEdit bool) []for
 		fields = append(fields, formField{kind: fieldSelect, label: labelMode, options: modeOpts, selected: selectIdxForValue(modeOpts, mode)})
 	}
 
+	eOpts := envOptions()
+
 	fields = append(fields,
 		formField{kind: fieldText, label: labelName, input: newTextInput("production-db", vals[labelName]), validate: validateConnectionName},
+		formField{kind: fieldSelect, label: labelEnv, options: eOpts, selected: selectIdxForValue(eOpts, vals[labelEnv])},
+		formField{kind: fieldText, label: labelDesc, input: newTextInput("optional", vals[labelDesc])},
 		formField{kind: fieldText, label: labelDatabase, input: newTextInput("myapp", vals[labelDatabase]), validate: validateNotEmpty("Database Name")},
 		formField{kind: fieldText, label: labelHost, input: newTextInput("localhost", vals[labelHost]), validate: validateNotEmpty("Host")},
 	)
@@ -341,6 +353,8 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 		}
 		data.Password = initial.Password
 		data.SRV = initial.SRV
+		data.Environment = initial.Environment
+		data.Description = initial.Description
 		origPw = initial.Password
 	}
 
@@ -356,6 +370,11 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 
 	isEdit := initial != nil && initial.Host != ""
 
+	env := data.Environment
+	if env == "" {
+		env = "production"
+	}
+
 	vals := map[string]string{
 		labelDatabase: data.Database,
 		labelHost:     data.Host,
@@ -364,6 +383,8 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 		labelUsername:  data.Username,
 		labelPassword:  data.Password,
 		labelSSLMode:  data.SSLMode,
+		labelEnv:      env,
+		labelDesc:     data.Description,
 	}
 
 	fields := buildFields(data.Driver, mode, vals, isEdit)
@@ -819,15 +840,17 @@ func (m connectionFormModel) toConnectionData() *ConnectionData {
 	}
 
 	return &ConnectionData{
-		Driver:   driver,
-		Name:     m.fieldValue(labelName),
-		Database: m.fieldValue(labelDatabase),
-		Host:     m.fieldValue(labelHost),
-		Port:     port,
-		Username: m.fieldValue(labelUsername),
-		SSLMode:  sslMode,
-		Password: pw,
-		SRV:      mode == modeSRV,
+		Driver:      driver,
+		Name:        m.fieldValue(labelName),
+		Database:    m.fieldValue(labelDatabase),
+		Host:        m.fieldValue(labelHost),
+		Port:        port,
+		Username:    m.fieldValue(labelUsername),
+		SSLMode:     sslMode,
+		Password:    pw,
+		SRV:         mode == modeSRV,
+		Environment: m.fieldValue(labelEnv),
+		Description: m.fieldValue(labelDesc),
 	}
 }
 

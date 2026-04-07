@@ -59,11 +59,13 @@ func handleListConnections(ctx context.Context, request mcp.CallToolRequest) (*m
 	}
 
 	type connectionInfo struct {
-		Name     string `json:"name"`
-		Driver   string `json:"driver"`
-		Host     string `json:"host"`
-		Database string `json:"db"`
-		Disabled bool   `json:"disabled,omitempty"`
+		Name        string `json:"name"`
+		Driver      string `json:"driver"`
+		Host        string `json:"host"`
+		Database    string `json:"db"`
+		Environment string `json:"environment,omitempty"`
+		Description string `json:"description,omitempty"`
+		Disabled    bool   `json:"disabled,omitempty"`
 	}
 
 	connections := make([]connectionInfo, 0, len(cfg.Connections))
@@ -73,11 +75,13 @@ func handleListConnections(ctx context.Context, request mcp.CallToolRequest) (*m
 			driver = "postgres"
 		}
 		connections = append(connections, connectionInfo{
-			Name:     name,
-			Driver:   driver,
-			Host:     c.Host,
-			Database: c.Database,
-			Disabled: c.Disabled,
+			Name:        name,
+			Driver:      driver,
+			Host:        c.Host,
+			Database:    c.Database,
+			Environment: c.Environment,
+			Description: c.Description,
+			Disabled:    c.Disabled,
 		})
 	}
 

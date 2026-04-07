@@ -40,17 +40,19 @@ type SafetyConfig struct {
 
 // Connection represents a named database connection
 type Connection struct {
-	Driver   string `mapstructure:"driver" yaml:"driver,omitempty"`
-	Name     string `mapstructure:"name" yaml:"name"`
-	Host     string `mapstructure:"host" yaml:"host"`
-	Port     int    `mapstructure:"port" yaml:"port"`
-	Database string `mapstructure:"database" yaml:"database"`
-	Username string `mapstructure:"username" yaml:"username"` // Optional: can be stored in keychain only
-	SSLMode  string `mapstructure:"ssl_mode" yaml:"ssl_mode"`
-	ReadOnly bool   `mapstructure:"readonly" yaml:"readonly"` // Always true for now (v1.0 is read-only)
-	Disabled bool   `mapstructure:"disabled" yaml:"disabled"`
-	URI      string `mapstructure:"uri" yaml:"uri,omitempty"` // Full connection URI (e.g. mongodb+srv://...), overrides host/port/ssl
-	SRV      bool   `mapstructure:"srv" yaml:"srv,omitempty"` // Use mongodb+srv:// scheme (MongoDB only)
+	Driver      string `mapstructure:"driver" yaml:"driver,omitempty"`
+	Name        string `mapstructure:"name" yaml:"name"`
+	Host        string `mapstructure:"host" yaml:"host"`
+	Port        int    `mapstructure:"port" yaml:"port"`
+	Database    string `mapstructure:"database" yaml:"database"`
+	Username    string `mapstructure:"username" yaml:"username"`
+	SSLMode     string `mapstructure:"ssl_mode" yaml:"ssl_mode"`
+	ReadOnly    bool   `mapstructure:"readonly" yaml:"readonly"`
+	Disabled    bool   `mapstructure:"disabled" yaml:"disabled"`
+	URI         string `mapstructure:"uri" yaml:"uri,omitempty"`
+	SRV         bool   `mapstructure:"srv" yaml:"srv,omitempty"`
+	Environment string `mapstructure:"environment" yaml:"environment,omitempty"`
+	Description string `mapstructure:"description" yaml:"description,omitempty"`
 }
 
 // DriverDefaults holds default port and SSL mode for a database driver.
