@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -38,7 +39,6 @@ func NewConfigCmd() *cobra.Command {
 
 	cmd.AddCommand(newConfigAddCmd())
 	cmd.AddCommand(newConfigListCmd())
-	cmd.AddCommand(newConfigShowCmd())
 	cmd.AddCommand(newConfigRemoveCmd())
 	cmd.AddCommand(newConfigCloneCmd())
 
@@ -366,121 +366,49 @@ func newConfigListCmd() *cobra.Command {
 				if !formatter.HumanMode {
 					return formatter.Success("config_list", map[string]interface{}{
 						"connections": []interface{}{},
-						"total_count": 0,
 					}, "No connections configured")
 				}
-
 				fmt.Println("No connections configured")
-				fmt.Println("\nAdd a connection with: dbridge config add <name>")
 				return nil
 			}
 
+			names := cfg.ListConnections()
+			sort.Strings(names)
+
 			if !formatter.HumanMode {
-				connections := make([]map[string]interface{}, 0, len(cfg.Connections))
-				for name, conn := range cfg.Connections {
+				connections := make([]map[string]interface{}, 0, len(names))
+				for _, name := range names {
+					conn := cfg.Connections[name]
 					driver := conn.Driver
 					if driver == "" {
 						driver = "postgres"
 					}
 					connections = append(connections, map[string]interface{}{
-						"driver":     driver,
-						"name":       name,
-						"host":       conn.Host,
-						"port":       conn.Port,
-						"database":   conn.Database,
-						"username":   conn.Username,
-						"ssl_mode":   conn.SSLMode,
-						"read_only":  conn.ReadOnly,
-						"disabled":   conn.Disabled,
+						"name":     name,
+						"driver":   driver,
+						"disabled": conn.Disabled,
 					})
 				}
-
 				return formatter.Success("config_list", map[string]interface{}{
-					"connections":     connections,
-					"total_count":     len(cfg.Connections),
-				}, fmt.Sprintf("Found %d connection(s)", len(cfg.Connections)))
+					"connections": connections,
+				}, fmt.Sprintf("Found %d connection(s)", len(names)))
 			}
 
-			fmt.Println("Connections:")
-			for name, conn := range cfg.Connections {
-				markers := ""
-				if conn.ReadOnly {
-					markers += " [read-only]"
-				} else {
-					markers += " [read-write]"
+			fmt.Printf("  %-30s %-12s %s\n", "NAME", "DRIVER", "STATUS")
+			for _, name := range names {
+				conn := cfg.Connections[name]
+				driver := conn.Driver
+				if driver == "" {
+					driver = "postgres"
 				}
+
+				status := "enabled"
 				if conn.Disabled {
-					markers += " [DISABLED]"
+					status = "disabled"
 				}
 
-				fmt.Printf("  %s - %s:%d/%s%s\n",
-					name,
-					conn.Host,
-					conn.Port,
-					conn.Database,
-					markers,
-				)
+				fmt.Printf("  %-30s %-12s %s\n", name, driver, status)
 			}
-
-			return nil
-		},
-	}
-}
-
-// newConfigShowCmd creates the 'config show' command
-func newConfigShowCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "show [connection-name]",
-		Short: "Show connection details",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			formatter := getFormatter(cmd)
-			connName := args[0]
-
-			cfg, err := config.Load()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			conn, err := cfg.GetConnection(connName)
-			if err != nil {
-				return formatError(cmd, "connection_not_found",
-					fmt.Sprintf("connection not found: %s", connName),
-					map[string]interface{}{
-						"connection_name":       connName,
-						"available_connections": cfg.ListConnections(),
-					})
-			}
-
-			if !formatter.HumanMode {
-				data := map[string]interface{}{
-					"connection": map[string]interface{}{
-						"driver":     conn.Driver,
-						"name":       conn.Name,
-						"host":       conn.Host,
-						"port":       conn.Port,
-						"database":   conn.Database,
-						"username":   conn.Username,
-						"ssl_mode":   conn.SSLMode,
-						"read_only":  conn.ReadOnly,
-						"disabled":   conn.Disabled,
-					},
-					"has_credentials": true,
-				}
-
-				return formatter.Success("config_show", data,
-					fmt.Sprintf("Connection '%s' details", connName))
-			}
-
-			fmt.Printf("Connection: %s\n", conn.Name)
-			fmt.Printf("Driver: %s\n", conn.Driver)
-			fmt.Printf("Host: %s\n", conn.Host)
-			fmt.Printf("Port: %d\n", conn.Port)
-			fmt.Printf("Database: %s\n", conn.Database)
-			fmt.Printf("Username: %s\n", conn.Username)
-			fmt.Printf("SSL Mode: %s\n", conn.SSLMode)
-			fmt.Printf("Read-only: %t\n", conn.ReadOnly)
-			fmt.Printf("Credentials: stored in keychain\n")
 
 			return nil
 		},

@@ -22,8 +22,8 @@ const (
 
 var (
 	formTitleStyle     = lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
-	formLabelStyle     = lipgloss.NewStyle().Width(12).Foreground(colorDim)
-	formActiveLabel    = lipgloss.NewStyle().Width(12).Foreground(colorAccent).Bold(true)
+	formLabelStyle     = lipgloss.NewStyle().Width(16).Foreground(colorDim)
+	formActiveLabel    = lipgloss.NewStyle().Width(16).Foreground(colorAccent).Bold(true)
 	formErrorStyle     = lipgloss.NewStyle().Foreground(colorError)
 	formHelpStyle      = lipgloss.NewStyle().Foreground(colorDim)
 	formSelectActive   = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
@@ -61,10 +61,10 @@ const (
 const (
 	labelDriver   = "Driver"
 	labelMode     = "Mode"
-	labelDatabase = "Database"
+	labelDatabase = "Database Name"
 	labelHost     = "Host"
 	labelPort     = "Port"
-	labelName     = "Name"
+	labelName     = "Connection Name"
 	labelUsername  = "Username"
 	labelPassword  = "Password"
 	labelSSLMode  = "SSL Mode"
@@ -236,7 +236,8 @@ func buildFields(driver, mode string, vals map[string]string, isEdit bool) []for
 	}
 
 	fields = append(fields,
-		formField{kind: fieldText, label: labelDatabase, input: newTextInput("myapp", vals[labelDatabase]), validate: validateNotEmpty("Database")},
+		formField{kind: fieldText, label: labelName, input: newTextInput("production-db", vals[labelName]), validate: validateConnectionName},
+		formField{kind: fieldText, label: labelDatabase, input: newTextInput("myapp", vals[labelDatabase]), validate: validateNotEmpty("Database Name")},
 		formField{kind: fieldText, label: labelHost, input: newTextInput("localhost", vals[labelHost]), validate: validateNotEmpty("Host")},
 	)
 
@@ -245,7 +246,6 @@ func buildFields(driver, mode string, vals map[string]string, isEdit bool) []for
 	}
 
 	fields = append(fields,
-		formField{kind: fieldText, label: labelName, input: newTextInput("production-db", vals[labelName]), validate: validateConnectionName},
 		formField{kind: fieldText, label: labelUsername, input: newTextInput("postgres", vals[labelUsername]), validate: validateNotEmpty("Username")},
 	)
 
@@ -733,16 +733,6 @@ func (m connectionFormModel) viewMain() string {
 		case fieldSelect:
 			b.WriteString(fmt.Sprintf("  %s%s %s\n", cursor, label, m.renderSelect(f, active)))
 		}
-	}
-
-	// In edit mode, show password status line with ctrl+p hint
-	if m.editMode {
-		pwStatus := formHelpStyle.Render("(none)")
-		if m.password != "" {
-			pwStatus = formHelpStyle.Render("•••••")
-		}
-		pwLabel := formLabelStyle.Render("Password")
-		b.WriteString(fmt.Sprintf("    %s %s  %s\n", pwLabel, pwStatus, formHelpStyle.Render("ctrl+p to change")))
 	}
 
 	if m.err != "" {

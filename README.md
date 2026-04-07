@@ -97,9 +97,6 @@ dbridge query mongo '{"collection": "orders", "aggregate": [{"$match": {"status"
 # List all connections
 dbridge config list
 
-# Show connection details
-dbridge config show local
-
 # Remove connection
 dbridge config remove staging
 ```

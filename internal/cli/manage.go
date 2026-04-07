@@ -152,7 +152,7 @@ func (m manageModel) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirming = true
 		m.confirmName = m.connections[m.cursor].name
 
-	case "e":
+	case "enter":
 		if len(m.connections) == 0 {
 			return m, nil
 		}
@@ -235,7 +235,7 @@ func (m manageModel) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString("  " + HelpStyle.Render("a add · e edit · d delete · t toggle · esc quit"))
+	b.WriteString("  " + HelpStyle.Render("a add · enter edit · d delete · t enable/disable · esc quit"))
 	b.WriteString("\n")
 
 	if m.statusMsg != "" {
