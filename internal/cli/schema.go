@@ -151,17 +151,7 @@ Examples:
 	return cmd
 }
 
-// getConnection is a helper to create a database connection
 func getConnection(connName string) (database.Connection, error) {
-	return getConnectionWithConfig(connName, false)
-}
-
-func getReadOnlyConnection(connName string) (database.Connection, error) {
-	return getConnectionWithConfig(connName, true)
-}
-
-func getConnectionWithConfig(connName string, forceReadOnly bool) (database.Connection, error) {
-	// Load config
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -176,7 +166,6 @@ func getConnectionWithConfig(connName string, forceReadOnly bool) (database.Conn
 		return nil, fmt.Errorf("connection '%s' is disabled (enable it with: dbridge config)", connName)
 	}
 
-	// Load credentials
 	credStore, err := credentials.NewStore("dbridge")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open credential store: %w", err)
@@ -190,9 +179,6 @@ func getConnectionWithConfig(connName string, forceReadOnly bool) (database.Conn
 		}
 	}
 
-	readOnly := connCfg.ReadOnly || forceReadOnly
-
-	// Create database connection
 	connConfig := &database.ConnectionConfig{
 		Driver:   connCfg.Driver,
 		Host:     connCfg.Host,
@@ -201,7 +187,6 @@ func getConnectionWithConfig(connName string, forceReadOnly bool) (database.Conn
 		Username: creds.Username,
 		Password: creds.Password,
 		SSLMode:  connCfg.SSLMode,
-		ReadOnly: readOnly,
 		URI:      connCfg.URI,
 		SRV:      connCfg.SRV,
 	}

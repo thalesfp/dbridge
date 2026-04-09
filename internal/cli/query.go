@@ -7,8 +7,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli/output"
 	"github.com/thalesfp/dbridge/internal/config"
-	"github.com/thalesfp/dbridge/internal/credentials"
-	"github.com/thalesfp/dbridge/internal/database"
 )
 
 // NewQueryCmd creates the query command
@@ -29,53 +27,16 @@ Examples:
 			connName := args[0]
 			sql := args[1]
 
-			// Load config
 			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			connCfg, err := cfg.GetConnection(connName)
+			conn, err := getConnection(connName)
 			if err != nil {
 				return err
 			}
-
-			if connCfg.Disabled {
-				return fmt.Errorf("connection '%s' is disabled (enable it with: dbridge config)", connName)
-			}
-
-			// Load credentials
-			credStore, err := credentials.NewStore("dbridge")
-			if err != nil {
-				return fmt.Errorf("failed to open credential store: %w", err)
-			}
-
 			ctx := context.Background()
-			creds, err := credStore.Load(ctx, connName)
-			if err != nil {
-				creds = credentials.Credentials{
-					Username: connCfg.Username,
-				}
-			}
-
-			// Create database connection
-			connConfig := &database.ConnectionConfig{
-				Driver:   connCfg.Driver,
-				Host:     connCfg.Host,
-				Port:     connCfg.Port,
-				Database: connCfg.Database,
-				Username: creds.Username,
-				Password: creds.Password,
-				SSLMode:  connCfg.SSLMode,
-				ReadOnly: connCfg.ReadOnly,
-				URI:      connCfg.URI,
-				SRV:      connCfg.SRV,
-			}
-
-			conn, err := database.NewConnection(ctx, connConfig)
-			if err != nil {
-				return fmt.Errorf("failed to connect to database: %w", err)
-			}
 			defer conn.Close(ctx)
 
 			// Execute query
