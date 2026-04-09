@@ -62,9 +62,9 @@ type DriverDefaults struct {
 }
 
 var driverDefaults = map[string]DriverDefaults{
-	"postgres": {5432, "require"},
-	"mysql":    {3306, "preferred"},
-	"mongodb":  {27017, "disable"},
+	"postgres": {5432, "verify-full"},
+	"mysql":    {3306, "verify-full"},
+	"mongodb":  {27017, "verify-full"},
 }
 
 // DriverDefaultsMap returns the driver defaults map for external use.
@@ -88,8 +88,8 @@ func DefaultConfig() *Config {
 				RequireConfirmation:        []string{"DELETE", "DROP", "TRUNCATE"},
 				MaxRowsWithoutConfirmation: 1000,
 			},
-			AuditLog:     true,
-			AuditLogPath: "~/.dbridge/audit.log",
+			AuditLog:     false,
+			AuditLogPath: "",
 		},
 		Connections: make(map[string]*Connection),
 	}
@@ -163,8 +163,19 @@ func (c *Config) Save() error {
 		viper.Set("profiles", nil)
 	}
 
-	if err := viper.WriteConfigAs(configPath); err != nil {
+	// Write to a temp file, set permissions, then rename so the final file
+	// is never readable by others even briefly.
+	tmpPath := filepath.Join(filepath.Dir(configPath), "config.tmp.yaml")
+	if err := viper.WriteConfigAs(tmpPath); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
+	}
+	if err := os.Chmod(tmpPath, 0600); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to set config file permissions: %w", err)
+	}
+	if err := os.Rename(tmpPath, configPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to finalize config file: %w", err)
 	}
 
 	return nil

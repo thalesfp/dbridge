@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -329,8 +331,8 @@ func TestGetConnection_DriverDefaults(t *testing.T) {
 		if p.Port != 5432 {
 			t.Errorf("Expected port 5432, got %d", p.Port)
 		}
-		if p.SSLMode != "require" {
-			t.Errorf("Expected ssl 'require', got '%s'", p.SSLMode)
+		if p.SSLMode != "verify-full" {
+			t.Errorf("Expected ssl 'verify-full', got '%s'", p.SSLMode)
 		}
 	})
 
@@ -353,8 +355,8 @@ func TestGetConnection_DriverDefaults(t *testing.T) {
 		if p.Port != 5432 {
 			t.Errorf("Expected port 5432, got %d", p.Port)
 		}
-		if p.SSLMode != "require" {
-			t.Errorf("Expected ssl 'require', got '%s'", p.SSLMode)
+		if p.SSLMode != "verify-full" {
+			t.Errorf("Expected ssl 'verify-full', got '%s'", p.SSLMode)
 		}
 	})
 
@@ -378,8 +380,8 @@ func TestGetConnection_DriverDefaults(t *testing.T) {
 		if p.Port != 3306 {
 			t.Errorf("Expected port 3306, got %d", p.Port)
 		}
-		if p.SSLMode != "preferred" {
-			t.Errorf("Expected ssl 'preferred', got '%s'", p.SSLMode)
+		if p.SSLMode != "verify-full" {
+			t.Errorf("Expected ssl 'verify-full', got '%s'", p.SSLMode)
 		}
 	})
 
@@ -427,5 +429,53 @@ func TestGetConnectionStillWorksWhenDisabled(t *testing.T) {
 	}
 	if !connection.Disabled {
 		t.Error("Expected connection to be disabled")
+	}
+}
+
+// TestDriverDefaults_SSLSecurityRequirements verifies that no driver defaults to an SSL mode
+// that skips certificate verification (disable, prefer/preferred, or require — pgx treats
+// sslmode=require as InsecureSkipVerify when no CA is configured).
+func TestDriverDefaults_SSLSecurityRequirements(t *testing.T) {
+	insecureModes := map[string]bool{
+		"disable":   true,
+		"prefer":    true,
+		"preferred": true,
+		"require":   true, // pgx treats sslmode=require as InsecureSkipVerify when no CA is configured
+	}
+	for driver, d := range DriverDefaultsMap() {
+		if insecureModes[d.SSLMode] {
+			t.Errorf("driver %q defaults to insecure SSL mode %q", driver, d.SSLMode)
+		}
+	}
+}
+
+// TestSave_ConfigFilePermissions verifies the config file is written with mode 0600
+// so credentials stored in the file are not world-readable.
+func TestSave_ConfigFilePermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	cfg := DefaultConfig()
+	cfg.AddConnection(&Connection{
+		Name:     "test",
+		Driver:   "postgres",
+		Host:     "localhost",
+		Database: "testdb",
+		Username: "user",
+	})
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	configPath := filepath.Join(tmpDir, ".config", "dbridge", "config.yaml")
+	info, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatalf("config file not found: %v", err)
+	}
+
+	perm := info.Mode().Perm()
+	if perm != 0600 {
+		t.Errorf("config file permissions = %04o, want 0600", perm)
 	}
 }

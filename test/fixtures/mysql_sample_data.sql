@@ -50,6 +50,16 @@ INSERT IGNORE INTO orders (user_id, product, amount, status) VALUES
     (8, 'Desk Lamp', 34.99, 'completed'),
     (1, 'Phone Case', 19.99, 'pending');
 
+-- Table with >10000 rows used by truncation integration tests.
+-- MySQL default cte_max_recursion_depth=1000 is too low; raise it for this session.
+SET cte_max_recursion_depth = 20000;
+CREATE TABLE IF NOT EXISTS large_table (id INT);
+INSERT INTO large_table (id)
+WITH RECURSIVE n(i) AS (
+    SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 10001
+)
+SELECT i FROM n;
+
 -- Create a view
 CREATE OR REPLACE VIEW user_summary AS
 SELECT

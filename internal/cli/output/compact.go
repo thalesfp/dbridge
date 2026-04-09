@@ -97,7 +97,7 @@ func formatCompactResult(result *database.QueryResult, opts FormatOptions) inter
 		compact.W = result.Warnings
 	}
 
-	if result.Truncated {
+	if result.Truncated && result.TotalRows > 0 {
 		compact.N = &result.TotalRows
 	}
 

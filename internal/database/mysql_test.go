@@ -103,8 +103,8 @@ func TestMapSSLToMysqlTLS(t *testing.T) {
 		{"require", "true"},
 		{"verify-ca", "true"},
 		{"verify-full", "true"},
-		{"", "preferred"},          // unknown defaults to preferred
-		{"something", "preferred"}, // unknown defaults to preferred
+		{"", "true"},          // unknown defaults to secure
+		{"something", "true"}, // unknown defaults to secure
 	}
 
 	for _, tt := range tests {
@@ -384,5 +384,39 @@ func TestMysqlConnectionPinning_Integration(t *testing.T) {
 	if err == nil {
 		_, _ = conn.Exec(ctx, "DROP TABLE _dbridge_pin_test")
 		t.Fatal("Expected read-only error after multiple queries")
+	}
+}
+
+// TestMysqlQueryTruncation_Integration verifies that queries returning more than
+// maxSQLRows rows set Truncated=true, cap RowCount, and include a warning.
+func TestMysqlQueryTruncation_Integration(t *testing.T) {
+	config := mysqlTestConfig(t, true)
+	ctx := context.Background()
+
+	conn, err := NewConnection(ctx, config)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	result, err := conn.Query(ctx, "SELECT * FROM large_table")
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+
+	if !result.Truncated {
+		t.Fatal("expected Truncated=true for query returning >10000 rows")
+	}
+	if result.RowCount != maxSQLRows {
+		t.Errorf("expected RowCount=%d, got %d", maxSQLRows, result.RowCount)
+	}
+	if result.TotalRows != 0 {
+		t.Errorf("TotalRows should be 0 (unknown), got %d", result.TotalRows)
+	}
+	if len(result.Warnings) == 0 {
+		t.Fatal("expected truncation warning in result")
+	}
+	if !strings.Contains(result.Warnings[0], "10000") {
+		t.Errorf("warning should mention row cap, got: %q", result.Warnings[0])
 	}
 }

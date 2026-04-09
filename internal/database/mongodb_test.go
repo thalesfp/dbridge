@@ -226,6 +226,55 @@ func TestValidatePipelineReadOnly(t *testing.T) {
 	}
 }
 
+// TestValidatePipelineReadOnly_DangerousNestedOperators verifies that server-side JavaScript
+// operators ($where, $function, $accumulator) are rejected even when nested inside
+// otherwise-valid stages, not just when used as top-level stage keys.
+func TestValidatePipelineReadOnly_DangerousNestedOperators(t *testing.T) {
+	tests := []struct {
+		name     string
+		pipeline []bson.M
+		wantErr  bool
+	}{
+		{
+			name:     "$where in $match executes server-side JavaScript",
+			pipeline: []bson.M{{"$match": bson.M{"$where": "function() { return this.admin === true; }"}}},
+			wantErr:  true,
+		},
+		{
+			name: "$function in $addFields executes arbitrary JavaScript",
+			pipeline: []bson.M{{"$addFields": bson.M{"computed": bson.M{"$function": bson.M{
+				"body": "function(n) { return n * 2; }",
+				"args": bson.A{"$value"},
+				"lang": "js",
+			}}}}},
+			wantErr: true,
+		},
+		{
+			name: "$accumulator in $group executes arbitrary JavaScript",
+			pipeline: []bson.M{{"$group": bson.M{"_id": "$dept", "custom": bson.M{"$accumulator": bson.M{
+				"init":           "function() { return 0; }",
+				"accumulate":     "function(state, val) { return state + val; }",
+				"accumulateArgs": bson.A{"$value"},
+				"merge":          "function(s1, s2) { return s1 + s2; }",
+				"lang":           "js",
+			}}}}},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePipelineReadOnly(tt.pipeline)
+			if tt.wantErr && err == nil {
+				t.Error("expected error for dangerous nested operator, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestMongoDriverRegistered(t *testing.T) {
 	names := DriverNames()
 	found := false

@@ -70,6 +70,10 @@ INSERT INTO analytics.events (event_type, user_id, metadata) VALUES
     ('page_view', 4, '{"page": "/products", "duration": 120}'),
     ('purchase', 4, '{"product_id": 102, "amount": 149.99}');
 
+-- Table with >10000 rows used by truncation integration tests.
+CREATE TABLE IF NOT EXISTS large_table AS
+SELECT i AS id FROM generate_series(1, 10001) AS t(i);
+
 -- Create a view
 CREATE OR REPLACE VIEW user_summary AS
 SELECT

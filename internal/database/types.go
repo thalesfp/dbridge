@@ -2,6 +2,9 @@ package database
 
 import "time"
 
+const maxSQLRows = 10000
+const truncatedWarning = "Results limited to %d rows. Add LIMIT to your query to retrieve more."
+
 // QueryResult represents the result of a SELECT query
 type QueryResult struct {
 	Columns     []string

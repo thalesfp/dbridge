@@ -87,7 +87,7 @@ func mapSSLToMysqlTLS(sslMode string) string {
 	case "verify-full":
 		return "true"
 	default:
-		return "preferred"
+		return "true"
 	}
 }
 
@@ -191,13 +191,19 @@ func (c *MysqlConnection) Query(ctx context.Context, sqlStr string, args ...inte
 		columnTypeNames[i] = mysqlTypeName(ct.DatabaseTypeName())
 	}
 
-	// Collect rows
+	// Pre-allocate scan destinations once; the *interface{} pointers are reused each row.
+	dest := make([]interface{}, len(colTypes))
+	for i := range dest {
+		dest[i] = new(interface{})
+	}
+
+	// Collect rows up to the hard cap
 	var result [][]interface{}
+	truncated := false
 	for rows.Next() {
-		// Create scan destinations
-		dest := make([]interface{}, len(colTypes))
-		for i := range dest {
-			dest[i] = new(interface{})
+		if len(result) >= maxSQLRows {
+			truncated = true
+			break
 		}
 
 		if err := rows.Scan(dest...); err != nil {
@@ -223,13 +229,18 @@ func (c *MysqlConnection) Query(ctx context.Context, sqlStr string, args ...inte
 
 	duration := time.Since(start)
 
-	return &QueryResult{
+	qr := &QueryResult{
 		Columns:     columns,
 		ColumnTypes: columnTypeNames,
 		Rows:        result,
 		RowCount:    len(result),
 		Duration:    duration,
-	}, nil
+		Truncated:   truncated,
+	}
+	if truncated {
+		qr.Warnings = append(qr.Warnings, fmt.Sprintf(truncatedWarning, maxSQLRows))
+	}
+	return qr, nil
 }
 
 // Exec executes a write operation

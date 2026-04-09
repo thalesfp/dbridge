@@ -204,11 +204,11 @@ func selectIdxForValue(opts []selectOption, val string) int {
 func sslOptions(driver string) []selectOption {
 	if driver == "mysql" {
 		return []selectOption{
-			{"Disable", "disable"}, {"Preferred", "preferred"}, {"Require", "require"},
+			{"Disable", "disable"}, {"Preferred", "preferred"}, {"Require", "require"}, {"Verify Full", "verify-full"},
 		}
 	}
 	return []selectOption{
-		{"Disable", "disable"}, {"Prefer", "prefer"}, {"Require", "require"},
+		{"Disable", "disable"}, {"Prefer", "prefer"}, {"Require", "require"}, {"Verify Full", "verify-full"},
 	}
 }
 

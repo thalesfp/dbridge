@@ -82,15 +82,15 @@ Interactive mode (default):
 
 Flag mode (for automation):
   - Provide all required flags to skip the interactive form
-  - Use --password flag or omit it for interactive password prompt
+  - Omit --password to be prompted securely; avoid passing passwords on the command line
+    (shell history, process listings, and CI logs may expose them)
 
 Examples:
   dbridge config add                    # Interactive TUI form
   dbridge config add production         # Interactive with pre-filled name
 
-  # Flag-based (non-interactive)
-  dbridge config add mydb --host=localhost --database=myapp --username=admin --password=secret
-  dbridge config add mydb --host=localhost --database=myapp --username=admin  # Password prompt only
+  # Flag-based (non-interactive) — password will be prompted
+  dbridge config add mydb --host=localhost --database=myapp --username=admin
 `,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

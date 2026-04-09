@@ -82,9 +82,14 @@ func (c *PgxConnection) Query(ctx context.Context, sql string, args ...interface
 		columnTypes[i] = getTypeName(fd.DataTypeOID)
 	}
 
-	// Collect rows
+	// Collect rows up to the hard cap
 	var result [][]interface{}
+	truncated := false
 	for rows.Next() {
+		if len(result) >= maxSQLRows {
+			truncated = true
+			break
+		}
 		values, err := rows.Values()
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
@@ -98,13 +103,18 @@ func (c *PgxConnection) Query(ctx context.Context, sql string, args ...interface
 
 	duration := time.Since(start)
 
-	return &QueryResult{
+	qr := &QueryResult{
 		Columns:     columns,
 		ColumnTypes: columnTypes,
 		Rows:        result,
 		RowCount:    len(result),
 		Duration:    duration,
-	}, nil
+		Truncated:   truncated,
+	}
+	if truncated {
+		qr.Warnings = append(qr.Warnings, fmt.Sprintf(truncatedWarning, maxSQLRows))
+	}
+	return qr, nil
 }
 
 // Exec executes a write operation

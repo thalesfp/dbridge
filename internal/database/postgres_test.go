@@ -300,3 +300,37 @@ func TestPgExplainQuery_Integration(t *testing.T) {
 		t.Error("Expected non-empty explain plan")
 	}
 }
+
+// TestPgQueryTruncation_Integration verifies that queries returning more than
+// maxSQLRows rows set Truncated=true, cap RowCount, and include a warning.
+func TestPgQueryTruncation_Integration(t *testing.T) {
+	config := pgTestConfig(t, true)
+	ctx := context.Background()
+
+	conn, err := NewConnection(ctx, config)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	result, err := conn.Query(ctx, "SELECT * FROM large_table")
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+
+	if !result.Truncated {
+		t.Fatal("expected Truncated=true for query returning >10000 rows")
+	}
+	if result.RowCount != maxSQLRows {
+		t.Errorf("expected RowCount=%d, got %d", maxSQLRows, result.RowCount)
+	}
+	if result.TotalRows != 0 {
+		t.Errorf("TotalRows should be 0 (unknown), got %d", result.TotalRows)
+	}
+	if len(result.Warnings) == 0 {
+		t.Fatal("expected truncation warning in result")
+	}
+	if !strings.Contains(result.Warnings[0], "10000") {
+		t.Errorf("warning should mention row cap, got: %q", result.Warnings[0])
+	}
+}

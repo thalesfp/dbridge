@@ -166,11 +166,61 @@ var writeStages = map[string]bool{
 	"$merge": true,
 }
 
+// jsOperators are operators that execute arbitrary server-side JavaScript.
+var jsOperators = map[string]bool{
+	"$where":       true,
+	"$function":    true,
+	"$accumulator": true,
+}
+
+const maxBSONDepth = 32
+
 func validatePipelineReadOnly(pipeline []bson.M) error {
 	for i, stage := range pipeline {
 		for key := range stage {
 			if writeStages[key] {
 				return fmt.Errorf("pipeline stage %d (%s) is not allowed in read-only mode", i, key)
+			}
+		}
+		if err := validateDocReadOnly(stage, 0); err != nil {
+			return fmt.Errorf("pipeline stage %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+func validateDocReadOnly(doc bson.M, depth int) error {
+	if depth > maxBSONDepth {
+		return fmt.Errorf("document exceeds maximum nesting depth")
+	}
+	for key, val := range doc {
+		if jsOperators[key] {
+			return fmt.Errorf("operator %s is not allowed (server-side JavaScript execution)", key)
+		}
+		if err := validateValueReadOnly(val, depth+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateValueReadOnly(val interface{}, depth int) error {
+	switch v := val.(type) {
+	case bson.M:
+		return validateDocReadOnly(v, depth)
+	case bson.D:
+		for _, elem := range v {
+			if jsOperators[elem.Key] {
+				return fmt.Errorf("operator %s is not allowed (server-side JavaScript execution)", elem.Key)
+			}
+			if err := validateValueReadOnly(elem.Value, depth+1); err != nil {
+				return err
+			}
+		}
+	case bson.A:
+		for _, elem := range v {
+			if err := validateValueReadOnly(elem, depth); err != nil {
+				return err
 			}
 		}
 	}
@@ -223,6 +273,10 @@ func (c *MongoConnection) Query(ctx context.Context, query string, args ...inter
 		filter := q.Filter
 		if filter == nil {
 			filter = bson.M{}
+		}
+
+		if err := validateDocReadOnly(filter, 0); err != nil {
+			return nil, err
 		}
 
 		findOpts := options.Find()

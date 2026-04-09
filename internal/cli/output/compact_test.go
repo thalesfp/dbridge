@@ -364,6 +364,40 @@ func TestFormatExecResult(t *testing.T) {
 	}
 }
 
+// TestFormatCompact_Truncated verifies that a truncated result with TotalRows=0
+// does not emit "n":0 in the compact output (which would mislead consumers into
+// thinking the query matched zero rows).
+func TestFormatCompact_Truncated(t *testing.T) {
+	result := &database.QueryResult{
+		Columns:     []string{"id"},
+		ColumnTypes: []string{"int4"},
+		Rows:        [][]interface{}{{1}},
+		RowCount:    1,
+		Truncated:   true,
+		TotalRows:   0, // never populated by drivers
+		Warnings:    []string{"Results limited to 10000 rows."},
+	}
+
+	output, err := FormatCompact(result, FormatOptions{
+		SmartSimplify:   false,
+		IncludeWarnings: true,
+	})
+	if err != nil {
+		t.Fatalf("FormatCompact failed: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &m); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
+	}
+	if _, hasN := m["n"]; hasN {
+		t.Errorf("compact output must not emit \"n\" when TotalRows=0; got: %s", output)
+	}
+	if _, hasW := m["w"]; !hasW {
+		t.Errorf("compact output should include warnings when truncated; got: %s", output)
+	}
+}
+
 // TestTokenSavings tests that compact format actually saves tokens
 func TestTokenSavings(t *testing.T) {
 	result := &database.QueryResult{
