@@ -101,6 +101,16 @@ dbridge config list
 dbridge config remove staging
 ```
 
+### Interactive Connection Manager
+
+Run `dbridge config` without subcommands to open the interactive TUI:
+
+```bash
+dbridge config
+```
+
+The TUI lets you add, edit, enable/disable, and delete connections with keyboard navigation (`↑↓` move, `enter` edit, `a` add, `d` delete, `t` toggle, `esc` quit).
+
 ## MCP Server
 
 dbridge includes an MCP server that exposes read-only database tools over stdio.
@@ -169,6 +179,8 @@ connections:
     database: "mydb"
     username: "admin"
     ssl_mode: "prefer"
+    environment: "dev"        # optional: dev, staging, production
+    description: "Local dev"  # optional: free-text label
     # Password stored in OS Keychain
 
   # MongoDB (standard)
@@ -209,6 +221,10 @@ Credentials are stored in a **dedicated OS keychain named `dbridge`**, separate 
 - **Linux** - Secret Service (GNOME Keyring / KWallet)
 
 Each connection's credentials are stored as `dbridge-<connection-name>` (e.g. `dbridge-local`). The config file (`~/.config/dbridge/config.yaml`) never contains passwords.
+
+### Locked keychain during queries
+
+If the keychain is locked when you run a query or schema command, dbridge returns an error rather than attempting a passwordless connection. Unlock the keychain first, or add the connection without a password if passwordless auth is intended.
 
 ### Why am I prompted for a password again?
 
