@@ -2,7 +2,10 @@ package credentials
 
 import (
 	"context"
+	"runtime"
 	"testing"
+
+	"github.com/99designs/keyring"
 )
 
 // MockStore implements Store for testing
@@ -58,6 +61,73 @@ type KeyringError struct {
 
 func (e *KeyringError) Error() string {
 	return "connection not found: " + e.Connection
+}
+
+// TestAllowedBackends_OsNativeOnly verifies that allowedBackends returns exactly
+// one backend and that it is not a fallback backend (file or pass).
+func TestAllowedBackends_OsNativeOnly(t *testing.T) {
+	backends := allowedBackends()
+
+	if len(backends) != 1 {
+		t.Fatalf("expected exactly 1 allowed backend, got %d: %v", len(backends), backends)
+	}
+
+	for _, b := range backends {
+		if b == keyring.FileBackend {
+			t.Error("FileBackend must not be in allowed backends — credentials would be stored in plaintext")
+		}
+		if b == keyring.PassBackend {
+			t.Error("PassBackend must not be in allowed backends — only OS-native keychains are permitted")
+		}
+	}
+}
+
+// TestAllowedBackends_MatchesPlatform verifies the backend matches the current OS.
+func TestAllowedBackends_MatchesPlatform(t *testing.T) {
+	backends := allowedBackends()
+	got := backends[0]
+
+	var want keyring.BackendType
+	switch runtime.GOOS {
+	case "darwin":
+		want = keyring.KeychainBackend
+	case "windows":
+		want = keyring.WinCredBackend
+	default:
+		want = keyring.SecretServiceBackend
+	}
+
+	if got != want {
+		t.Errorf("allowedBackends() on %s = %q, want %q", runtime.GOOS, got, want)
+	}
+}
+
+// TestKeyringStore_Type_MatchesPlatform verifies Type() returns the platform-specific name.
+func TestKeyringStore_Type_MatchesPlatform(t *testing.T) {
+	s := &KeyringStore{}
+	got := s.Type()
+
+	var want string
+	switch runtime.GOOS {
+	case "darwin":
+		want = "keychain"
+	case "windows":
+		want = "wincred"
+	default:
+		want = "secret-service"
+	}
+
+	if got != want {
+		t.Errorf("KeyringStore.Type() on %s = %q, want %q", runtime.GOOS, got, want)
+	}
+}
+
+// TestKeyringStore_Type_NotGeneric verifies Type() no longer returns the old generic "keyring".
+func TestKeyringStore_Type_NotGeneric(t *testing.T) {
+	s := &KeyringStore{}
+	if s.Type() == "keyring" {
+		t.Error("Type() must return a specific backend name, not the generic 'keyring'")
+	}
 }
 
 // TestMockStore_SaveAndLoad tests saving and loading credentials
