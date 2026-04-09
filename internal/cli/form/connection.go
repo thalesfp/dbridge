@@ -15,8 +15,9 @@ type ConnectionData struct {
 	Port        int
 	Username    string
 	SSLMode     string
-	Password    string
-	SRV         bool
+	Password        string
+	PasswordChanged bool // true only when user explicitly changed/cleared the password via Ctrl+P
+	SRV             bool
 	Environment string
 	Description string
 }

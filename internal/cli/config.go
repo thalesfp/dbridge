@@ -588,13 +588,6 @@ func runEditFlow(cfg *config.Config, connName string) error {
 	}
 
 	ctx := context.Background()
-	existingCreds, err := credStore.Load(ctx, connName)
-
-	// Default to empty password if credentials don't exist (passwordless connection)
-	existingPassword := ""
-	if err == nil {
-		existingPassword = existingCreds.Password
-	}
 
 	// Launch form pre-filled with existing data
 	editSaveFn := func(d *form.ConnectionData) string {
@@ -618,15 +611,15 @@ func runEditFlow(cfg *config.Config, connName string) error {
 			Description: d.Description,
 		}
 
-		if d.Password != "" {
-			if err := credStore.Save(ctx, d.Name, credentials.Credentials{
+		if d.PasswordChanged {
+			if d.Password == "" {
+				_ = credStore.Delete(ctx, d.Name)
+			} else if err := credStore.Save(ctx, d.Name, credentials.Credentials{
 				Username: d.Username,
 				Password: d.Password,
 			}); err != nil {
 				return "failed to save credentials: " + err.Error()
 			}
-		} else {
-			_ = credStore.Delete(ctx, d.Name)
 		}
 
 		cfg.AddConnection(updatedConn)
@@ -644,7 +637,6 @@ func runEditFlow(cfg *config.Config, connName string) error {
 		Port:        existingConn.Port,
 		Username:    existingConn.Username,
 		SSLMode:     existingConn.SSLMode,
-		Password:    existingPassword,
 		SRV:         existingConn.SRV,
 		Environment: existingConn.Environment,
 		Description: existingConn.Description,

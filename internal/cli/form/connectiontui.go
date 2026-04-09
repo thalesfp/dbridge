@@ -119,9 +119,9 @@ type connectionFormModel struct {
 	editingPw  bool
 	pwInput    textinput.Model
 	pwConfirm  textinput.Model
-	pwFocus    int
-	pwVisible  bool
-	origPw     string
+	pwFocus         int
+	pwVisible       bool
+	passwordChanged bool
 
 	// Callbacks
 	testFn func(context.Context, *ConnectionData) string
@@ -332,7 +332,6 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 		Port:    pgDefaults.Port,
 		SSLMode: pgDefaults.SSLMode,
 	}
-	origPw := ""
 	if initial != nil {
 		if initial.Driver != "" {
 			data.Driver = initial.Driver
@@ -355,7 +354,6 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 		data.SRV = initial.SRV
 		data.Environment = initial.Environment
 		data.Description = initial.Description
-		origPw = initial.Password
 	}
 
 	portStr := strconv.Itoa(data.Port)
@@ -393,7 +391,6 @@ func newConnectionFormModel(initial *ConnectionData) connectionFormModel {
 		fields:     fields,
 		focusIndex: 0,
 		password:   data.Password,
-		origPw:     origPw,
 		editMode:   isEdit,
 		defaults:   data,
 		lastDriver: data.Driver,
@@ -642,6 +639,7 @@ func (m connectionFormModel) updatePassword(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 			return m, nil
 		}
 		m.password = pw
+		m.passwordChanged = true
 		m.editingPw = false
 		m.err = ""
 		if pw != "" {
@@ -840,17 +838,18 @@ func (m connectionFormModel) toConnectionData() *ConnectionData {
 	}
 
 	return &ConnectionData{
-		Driver:      driver,
-		Name:        m.fieldValue(labelName),
-		Database:    m.fieldValue(labelDatabase),
-		Host:        m.fieldValue(labelHost),
-		Port:        port,
-		Username:    m.fieldValue(labelUsername),
-		SSLMode:     sslMode,
-		Password:    pw,
-		SRV:         mode == modeSRV,
-		Environment: m.fieldValue(labelEnv),
-		Description: m.fieldValue(labelDesc),
+		Driver:          driver,
+		Name:            m.fieldValue(labelName),
+		Database:        m.fieldValue(labelDatabase),
+		Host:            m.fieldValue(labelHost),
+		Port:            port,
+		Username:        m.fieldValue(labelUsername),
+		SSLMode:         sslMode,
+		Password:        pw,
+		PasswordChanged: m.passwordChanged,
+		SRV:             mode == modeSRV,
+		Environment:     m.fieldValue(labelEnv),
+		Description:     m.fieldValue(labelDesc),
 	}
 }
 
@@ -861,7 +860,7 @@ func RunConnectionForm(initial *ConnectionData, opts ...FormOption) (*Connection
 	for _, opt := range opts {
 		opt(&m)
 	}
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()
 	if err != nil {
 		return nil, err
