@@ -3,6 +3,7 @@ package credentials
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/99designs/keyring"
@@ -41,14 +42,27 @@ type KeyringStore struct {
 	service string
 }
 
+// allowedBackends returns the OS-native keychain backend for the current platform.
+// No fallback backends (file, pass) are allowed — if the OS keychain is unavailable,
+// keyring.Open will return an error rather than silently storing credentials elsewhere.
+func allowedBackends() []keyring.BackendType {
+	switch runtime.GOOS {
+	case "darwin":
+		return []keyring.BackendType{keyring.KeychainBackend}
+	case "windows":
+		return []keyring.BackendType{keyring.WinCredBackend}
+	default: // linux and other Unix
+		return []keyring.BackendType{keyring.SecretServiceBackend}
+	}
+}
+
 // NewKeyringStore creates a new keyring-based credential store
 func NewKeyringStore(serviceName string) (*KeyringStore, error) {
 	kr, err := keyring.Open(keyring.Config{
 		ServiceName:              serviceName,
 		KeychainName:             serviceName,
 		KeychainTrustApplication: true,
-		FileDir:                  "~/.config/dbridge/",
-		FilePasswordFunc:         keyring.TerminalPrompt,
+		AllowedBackends:          allowedBackends(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open keyring: %w", err)
@@ -135,9 +149,16 @@ func (s *KeyringStore) Available() bool {
 	return s.keyring != nil
 }
 
-// Type returns "keyring"
+// Type returns the OS-native keychain backend name
 func (s *KeyringStore) Type() string {
-	return "keyring"
+	switch runtime.GOOS {
+	case "darwin":
+		return "keychain"
+	case "windows":
+		return "wincred"
+	default:
+		return "secret-service"
+	}
 }
 
 // connectionKey generates the keychain key for a connection
