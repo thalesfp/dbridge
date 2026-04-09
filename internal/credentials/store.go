@@ -2,12 +2,16 @@ package credentials
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
 
 	"github.com/99designs/keyring"
 )
+
+// ErrNotFound is returned by Load when no credentials are stored for the connection.
+var ErrNotFound = errors.New("credentials not found")
 
 // Credentials holds database authentication information
 type Credentials struct {
@@ -101,6 +105,9 @@ func (s *KeyringStore) Save(ctx context.Context, connection string, creds Creden
 func (s *KeyringStore) Load(ctx context.Context, connection string) (Credentials, error) {
 	item, err := s.keyring.Get(s.connectionKey(connection))
 	if err != nil {
+		if errors.Is(err, keyring.ErrKeyNotFound) {
+			return Credentials{}, ErrNotFound
+		}
 		return Credentials{}, fmt.Errorf("failed to load credentials: %w", err)
 	}
 

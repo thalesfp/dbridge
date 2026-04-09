@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"context"
+	"errors"
 	"runtime"
 	"testing"
 
@@ -28,7 +29,7 @@ func (m *MockStore) Save(ctx context.Context, connection string, creds Credentia
 func (m *MockStore) Load(ctx context.Context, connection string) (Credentials, error) {
 	creds, ok := m.data[connection]
 	if !ok {
-		return Credentials{}, &KeyringError{Connection: connection}
+		return Credentials{}, ErrNotFound
 	}
 	return creds, nil
 }
@@ -52,15 +53,6 @@ func (m *MockStore) Available() bool {
 
 func (m *MockStore) Type() string {
 	return "mock"
-}
-
-// KeyringError represents a keyring error
-type KeyringError struct {
-	Connection string
-}
-
-func (e *KeyringError) Error() string {
-	return "connection not found: " + e.Connection
 }
 
 // TestAllowedBackends_OsNativeOnly verifies that allowedBackends returns exactly
@@ -150,10 +142,11 @@ func TestMockStore_LoadNonexistent(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := store.Load(ctx, "nonexistent")
-	if err == nil {
-		t.Error("Expected error when loading nonexistent connection")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
+
 
 // TestMockStore_Delete tests deleting credentials
 func TestMockStore_Delete(t *testing.T) {

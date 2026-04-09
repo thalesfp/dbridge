@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -174,6 +175,9 @@ func getConnection(connName string) (database.Connection, error) {
 	ctx := context.Background()
 	creds, err := credStore.Load(ctx, connName)
 	if err != nil {
+		if !errors.Is(err, credentials.ErrNotFound) {
+			return nil, fmt.Errorf("failed to load credentials for '%s': %w", connName, err)
+		}
 		creds = credentials.Credentials{
 			Username: connCfg.Username,
 		}

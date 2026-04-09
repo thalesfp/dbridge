@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -540,12 +541,10 @@ Examples:
 
 			ctx := context.Background()
 			sourceCreds, err := credStore.Load(ctx, sourceConnName)
-
-			// Default to empty password if credentials don't exist (passwordless connection)
-			sourcePassword := ""
-			if err == nil {
-				sourcePassword = sourceCreds.Password
+			if err != nil && !errors.Is(err, credentials.ErrNotFound) {
+				return fmt.Errorf("failed to load credentials for '%s': %w", sourceConnName, err)
 			}
+			sourcePassword := sourceCreds.Password
 
 			// Determine new connection name
 			newConnName := ""
