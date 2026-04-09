@@ -55,9 +55,7 @@ func buildPgConnString(config *ConnectionConfig) string {
 		config.SSLMode,
 	)
 
-	if config.ReadOnly {
-		connString += "&default_transaction_read_only=on"
-	}
+	connString += "&default_transaction_read_only=on"
 
 	return connString
 }

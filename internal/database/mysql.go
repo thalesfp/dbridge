@@ -23,7 +23,6 @@ func (d *MysqlDriver) Connect(ctx context.Context, config *ConnectionConfig) (Co
 		return nil, fmt.Errorf("failed to open mysql connection: %w", err)
 	}
 
-	// Pin a single connection so session-level settings (read-only) persist
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		db.Close()
@@ -36,13 +35,10 @@ func (d *MysqlDriver) Connect(ctx context.Context, config *ConnectionConfig) (Co
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Enforce read-only at session level on the pinned connection
-	if config.ReadOnly {
-		if _, err := conn.ExecContext(ctx, "SET SESSION TRANSACTION READ ONLY"); err != nil {
-			conn.Close()
-			db.Close()
-			return nil, fmt.Errorf("failed to set read-only mode: %w", err)
-		}
+	if _, err := conn.ExecContext(ctx, "SET SESSION TRANSACTION READ ONLY"); err != nil {
+		conn.Close()
+		db.Close()
+		return nil, fmt.Errorf("failed to set read-only mode: %w", err)
 	}
 
 	return &MysqlConnection{
@@ -53,7 +49,7 @@ func (d *MysqlDriver) Connect(ctx context.Context, config *ConnectionConfig) (Co
 }
 
 // MysqlConnection implements Connection using database/sql.
-// Uses a pinned *sql.Conn so session settings (read-only) persist across queries.
+// Uses a pinned *sql.Conn so session settings persist across queries.
 type MysqlConnection struct {
 	db     *sql.DB
 	conn   *sql.Conn

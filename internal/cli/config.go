@@ -59,7 +59,6 @@ func newConfigAddCmd() *cobra.Command {
 		username       string
 		password       string
 		sslMode        string
-		readOnly       bool
 		testConnection bool
 		environment    string
 		description    string
@@ -221,7 +220,6 @@ Examples:
 					Database:    connData.Database,
 					Username:    connData.Username,
 					SSLMode:     connData.SSLMode,
-					ReadOnly:    true,
 					SRV:         connData.SRV,
 					Environment: connData.Environment,
 					Description: connData.Description,
@@ -269,14 +267,13 @@ Examples:
 
 				data := map[string]interface{}{
 					"connection": map[string]interface{}{
-						"driver":    connData.Driver,
-						"name":      connData.Name,
-						"host":      connData.Host,
-						"port":      connData.Port,
-						"database":  connData.Database,
-						"username":  connData.Username,
-						"ssl_mode":  connData.SSLMode,
-						"read_only": true,
+						"driver":   connData.Driver,
+						"name":     connData.Name,
+						"host":     connData.Host,
+						"port":     connData.Port,
+						"database": connData.Database,
+						"username": connData.Username,
+						"ssl_mode": connData.SSLMode,
 					},
 					"credentials_stored": connData.Password != "",
 					"credential_store":   credStore,
@@ -317,7 +314,6 @@ Examples:
 	cmd.Flags().StringVar(&username, "username", "", "Database username (required for flag mode)")
 	cmd.Flags().StringVar(&password, "password", "", "Database password (optional, will prompt if not provided)")
 	cmd.Flags().StringVar(&sslMode, "ssl-mode", "", "SSL mode (default: driver-specific)")
-	cmd.Flags().BoolVar(&readOnly, "readonly", true, "Read-only mode")
 	cmd.Flags().BoolVar(&testConnection, "test-connection", false, "Test the database connection after adding")
 	cmd.Flags().StringVar(&environment, "environment", "production", "Environment (production, staging, development, local)")
 	cmd.Flags().StringVar(&description, "description", "", "Connection description")
@@ -616,7 +612,6 @@ func runEditFlow(cfg *config.Config, connName string) error {
 			Database:    d.Database,
 			Username:    d.Username,
 			SSLMode:     d.SSLMode,
-			ReadOnly:    true,
 			Disabled:    existingConn.Disabled,
 			SRV:         d.SRV,
 			Environment: d.Environment,
@@ -730,7 +725,6 @@ func runConnectionTest(ctx context.Context, data *form.ConnectionData) *connecti
 		Username: data.Username,
 		Password: data.Password,
 		SSLMode:  data.SSLMode,
-		ReadOnly: true,
 		SRV:      data.SRV,
 	}
 	conn, err := dbpkg.NewConnection(ctx, connConfig)

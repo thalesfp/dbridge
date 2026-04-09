@@ -47,7 +47,6 @@ func TestAddConnection(t *testing.T) {
 		Database: "testdb",
 		Username: "testuser",
 		SSLMode:  "require",
-		ReadOnly: false,
 	}
 
 	cfg.AddConnection(connection)
@@ -228,11 +227,6 @@ func TestConnectionDefaults(t *testing.T) {
 	// Default port should be 0 (will be set to 5432 by defaults or during connection)
 	if connection.Port != 0 {
 		t.Errorf("Expected default port 0, got %d", connection.Port)
-	}
-
-	// Default readonly should be false
-	if connection.ReadOnly {
-		t.Error("Expected default ReadOnly to be false")
 	}
 
 	// Default disabled should be false (zero value)

@@ -37,7 +37,6 @@ type ConnectionConfig struct {
 	Username string
 	Password string
 	SSLMode  string
-	ReadOnly bool
 	URI      string
 	SRV      bool
 }

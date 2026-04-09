@@ -311,7 +311,6 @@ func saveConnectionCallback(d *form.ConnectionData) string {
 		Database:    d.Database,
 		Username:    d.Username,
 		SSLMode:     d.SSLMode,
-		ReadOnly:    true,
 		SRV:         d.SRV,
 		Environment: d.Environment,
 		Description: d.Description,

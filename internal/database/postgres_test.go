@@ -78,10 +78,10 @@ func TestConnectionConfig(t *testing.T) {
 	}
 }
 
-// TestBuildPgConnString_ReadOnly tests that the connection string includes
-// default_transaction_read_only=on when ReadOnly is true.
-func TestBuildPgConnString_ReadOnly(t *testing.T) {
-	base := ConnectionConfig{
+// TestBuildPgConnString_AlwaysReadOnly tests that the connection string always
+// includes default_transaction_read_only=on.
+func TestBuildPgConnString_AlwaysReadOnly(t *testing.T) {
+	cfg := ConnectionConfig{
 		Host:     "localhost",
 		Port:     5432,
 		Database: "testdb",
@@ -89,30 +89,14 @@ func TestBuildPgConnString_ReadOnly(t *testing.T) {
 		Password: "pass",
 		SSLMode:  "disable",
 	}
-
-	t.Run("read-only appends param", func(t *testing.T) {
-		cfg := base
-		cfg.ReadOnly = true
-		cs := buildPgConnString(&cfg)
-
-		if !strings.Contains(cs, "default_transaction_read_only=on") {
-			t.Errorf("Expected connection string to contain default_transaction_read_only=on, got: %s", cs)
-		}
-	})
-
-	t.Run("read-write omits param", func(t *testing.T) {
-		cfg := base
-		cfg.ReadOnly = false
-		cs := buildPgConnString(&cfg)
-
-		if strings.Contains(cs, "default_transaction_read_only") {
-			t.Errorf("Expected connection string to NOT contain default_transaction_read_only, got: %s", cs)
-		}
-	})
+	cs := buildPgConnString(&cfg)
+	if !strings.Contains(cs, "default_transaction_read_only=on") {
+		t.Errorf("connection string must always contain default_transaction_read_only=on, got: %s", cs)
+	}
 }
 
 // pgTestConfig parses TEST_DATABASE_URL into a ConnectionConfig.
-func pgTestConfig(t *testing.T, readOnly bool) *ConnectionConfig {
+func pgTestConfig(t *testing.T) *ConnectionConfig {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
@@ -145,14 +129,13 @@ func pgTestConfig(t *testing.T, readOnly bool) *ConnectionConfig {
 		Username: username,
 		Password: password,
 		SSLMode:  sslMode,
-		ReadOnly: readOnly,
 	}
 }
 
 // TestReadOnlyConnection_Integration verifies that a read-only connection
 // rejects write operations at the database level.
 func TestReadOnlyConnection_Integration(t *testing.T) {
-	config := pgTestConfig(t, true)
+	config := pgTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -188,7 +171,7 @@ func TestReadOnlyConnection_Integration(t *testing.T) {
 
 // TestPgQueryWithData_Integration tests querying real fixture data.
 func TestPgQueryWithData_Integration(t *testing.T) {
-	config := pgTestConfig(t, true)
+	config := pgTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -227,7 +210,7 @@ func TestPgQueryWithData_Integration(t *testing.T) {
 
 // TestPgSchemaInspection_Integration tests schema inspector against fixture data.
 func TestPgSchemaInspection_Integration(t *testing.T) {
-	config := pgTestConfig(t, true)
+	config := pgTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -283,7 +266,7 @@ func TestPgSchemaInspection_Integration(t *testing.T) {
 
 // TestPgExplainQuery_Integration tests EXPLAIN returns a plan.
 func TestPgExplainQuery_Integration(t *testing.T) {
-	config := pgTestConfig(t, true)
+	config := pgTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -304,7 +287,7 @@ func TestPgExplainQuery_Integration(t *testing.T) {
 // TestPgQueryTruncation_Integration verifies that queries returning more than
 // maxSQLRows rows set Truncated=true, cap RowCount, and include a warning.
 func TestPgQueryTruncation_Integration(t *testing.T) {
-	config := pgTestConfig(t, true)
+	config := pgTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)

@@ -173,7 +173,7 @@ func TestMysqlDriverRegistered(t *testing.T) {
 }
 
 // mysqlTestConfig parses TEST_MYSQL_URL into a ConnectionConfig.
-func mysqlTestConfig(t *testing.T, readOnly bool) *ConnectionConfig {
+func mysqlTestConfig(t *testing.T) *ConnectionConfig {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
@@ -200,13 +200,12 @@ func mysqlTestConfig(t *testing.T, readOnly bool) *ConnectionConfig {
 		Username: cfg.User,
 		Password: cfg.Passwd,
 		SSLMode:  "disable",
-		ReadOnly: readOnly,
 	}
 }
 
 // TestMysqlConnection_Integration tests basic MySQL connectivity.
 func TestMysqlConnection_Integration(t *testing.T) {
-	config := mysqlTestConfig(t, true)
+	config := mysqlTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -227,7 +226,7 @@ func TestMysqlConnection_Integration(t *testing.T) {
 
 // TestMysqlReadOnly_Integration tests that read-only mode blocks writes.
 func TestMysqlReadOnly_Integration(t *testing.T) {
-	config := mysqlTestConfig(t, true)
+	config := mysqlTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -250,7 +249,7 @@ func TestMysqlReadOnly_Integration(t *testing.T) {
 
 // TestMysqlQueryWithData_Integration tests querying real fixture data.
 func TestMysqlQueryWithData_Integration(t *testing.T) {
-	config := mysqlTestConfig(t, true)
+	config := mysqlTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -289,7 +288,7 @@ func TestMysqlQueryWithData_Integration(t *testing.T) {
 
 // TestMysqlSchemaInspection_Integration tests schema inspector against fixture data.
 func TestMysqlSchemaInspection_Integration(t *testing.T) {
-	config := mysqlTestConfig(t, true)
+	config := mysqlTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -339,7 +338,7 @@ func TestMysqlSchemaInspection_Integration(t *testing.T) {
 
 // TestMysqlExplainQuery_Integration tests EXPLAIN returns a plan.
 func TestMysqlExplainQuery_Integration(t *testing.T) {
-	config := mysqlTestConfig(t, true)
+	config := mysqlTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -359,7 +358,7 @@ func TestMysqlExplainQuery_Integration(t *testing.T) {
 
 // TestMysqlConnectionPinning_Integration verifies multiple queries use the same pinned connection.
 func TestMysqlConnectionPinning_Integration(t *testing.T) {
-	config := mysqlTestConfig(t, true)
+	config := mysqlTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)
@@ -390,7 +389,7 @@ func TestMysqlConnectionPinning_Integration(t *testing.T) {
 // TestMysqlQueryTruncation_Integration verifies that queries returning more than
 // maxSQLRows rows set Truncated=true, cap RowCount, and include a warning.
 func TestMysqlQueryTruncation_Integration(t *testing.T) {
-	config := mysqlTestConfig(t, true)
+	config := mysqlTestConfig(t)
 	ctx := context.Background()
 
 	conn, err := NewConnection(ctx, config)

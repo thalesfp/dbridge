@@ -47,7 +47,6 @@ type Connection struct {
 	Database    string `mapstructure:"database" yaml:"database"`
 	Username    string `mapstructure:"username" yaml:"username"`
 	SSLMode     string `mapstructure:"ssl_mode" yaml:"ssl_mode"`
-	ReadOnly    bool   `mapstructure:"readonly" yaml:"readonly"`
 	Disabled    bool   `mapstructure:"disabled" yaml:"disabled"`
 	URI         string `mapstructure:"uri" yaml:"uri,omitempty"`
 	SRV         bool   `mapstructure:"srv" yaml:"srv,omitempty"`

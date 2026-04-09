@@ -19,7 +19,7 @@ func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	conn, err := getReadOnlyConnection(connName)
+	conn, err := getConnection(connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -194,7 +194,7 @@ func handleExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	conn, err := getReadOnlyConnection(connName)
+	conn, err := getConnection(connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
