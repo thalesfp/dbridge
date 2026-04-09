@@ -23,8 +23,15 @@ var (
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(ColorWarning).
 				Padding(1, 3)
-	manageDialogTitle = lipgloss.NewStyle().Foreground(ColorWarning).Bold(true)
-	manageDialogHint  = lipgloss.NewStyle().Foreground(ColorDim)
+	manageDialogTitle  = lipgloss.NewStyle().Foreground(ColorWarning).Bold(true)
+	manageDialogHint   = lipgloss.NewStyle().Foreground(ColorDim)
+	manageDriverPgStyle  = lipgloss.NewStyle().Foreground(ColorAccent)
+	manageDriverMyStyle  = lipgloss.NewStyle().Foreground(ColorWarning)
+	manageDriverMoStyle  = lipgloss.NewStyle().Foreground(ColorSuccess)
+	manageDriverColStyle = lipgloss.NewStyle().Width(2)
+	manageEnvProdStyle   = lipgloss.NewStyle().Foreground(ColorError)
+	manageEnvStagStyle   = lipgloss.NewStyle().Foreground(ColorWarning)
+	manageEnvDevStyle    = lipgloss.NewStyle().Foreground(ColorSuccess)
 )
 
 type connectionItem struct {
@@ -38,6 +45,9 @@ type manageModel struct {
 	connections    []connectionItem
 	cursor         int
 	maxName        int
+	maxEnv         int
+	envColStyle    lipgloss.Style
+	headerLine     string
 	cfg            *config.Config
 	confirming     bool
 	confirmName    string
@@ -64,12 +74,32 @@ func (m *manageModel) loadConnections() {
 
 	m.connections = make([]connectionItem, len(names))
 	m.maxName = 0
+	maxEnv := 0
 	for i, name := range names {
-		m.connections[i] = connectionItem{name: name, conn: m.cfg.Connections[name]}
+		conn := m.cfg.Connections[name]
+		m.connections[i] = connectionItem{name: name, conn: conn}
 		if len(name) > m.maxName {
 			m.maxName = len(name)
 		}
+		if len(conn.Environment) > maxEnv {
+			maxEnv = len(conn.Environment)
+		}
 	}
+	m.maxEnv = maxEnv
+	m.envColStyle = lipgloss.NewStyle().Width(maxEnv)
+
+	hName := HelpStyle.Render(fmt.Sprintf("%-*s", m.maxName, "name"))
+	hEnvLabel := ""
+	if maxEnv >= 3 {
+		hEnvLabel = fmt.Sprintf("%-*s", maxEnv, "env")
+	} else if maxEnv > 0 {
+		hEnvLabel = fmt.Sprintf("%-*s", maxEnv, "env"[:maxEnv])
+	}
+	m.headerLine = fmt.Sprintf("      %s  %-2s  %s  %s\n",
+		hName, "",
+		HelpStyle.Render(hEnvLabel),
+		HelpStyle.Render("connection"),
+	)
 
 	if m.cursor >= len(m.connections) {
 		m.cursor = max(0, len(m.connections)-1)
@@ -197,7 +227,7 @@ func (m manageModel) View() string {
 	if len(m.connections) == 0 {
 		var b strings.Builder
 		b.WriteString("\n")
-		b.WriteString(TitleStyle.Render("  Manage Connections"))
+		b.WriteString(TitleStyle.Render("  dbridge") + HelpStyle.Render("  Manage Connections"))
 		b.WriteString("\n\n")
 		b.WriteString("  " + HelpStyle.Render("No connections configured."))
 		b.WriteString("\n\n")
@@ -213,8 +243,11 @@ func (m manageModel) View() string {
 	var b strings.Builder
 
 	b.WriteString("\n")
-	b.WriteString(TitleStyle.Render("  Manage Connections"))
+	b.WriteString(TitleStyle.Render("  dbridge") + HelpStyle.Render("  Manage Connections"))
 	b.WriteString("\n\n")
+
+	b.WriteString(m.headerLine)
+	b.WriteString("\n")
 
 	for i, item := range m.connections {
 		cursor := "  "
@@ -228,8 +261,8 @@ func (m manageModel) View() string {
 		}
 
 		name := manageNameStyle.Render(fmt.Sprintf("%-*s", m.maxName, item.name))
-		driver := HelpStyle.Render(driverShort(item.conn.Driver))
-		env := HelpStyle.Render(item.conn.Environment)
+		driver := manageDriverColStyle.Render(driverBadge(item.conn.Driver))
+		env := m.envColStyle.Render(envBadge(item.conn.Environment))
 		connStr := HelpStyle.Render(fmt.Sprintf("%s:%d/%s", item.conn.Host, item.conn.Port, item.conn.Database))
 
 		b.WriteString(fmt.Sprintf("  %s%s %s  %s  %s  %s\n", cursor, icon, name, driver, env, connStr))
@@ -268,15 +301,45 @@ func (m manageModel) View() string {
 
 func driverShort(driver string) string {
 	switch driver {
-	case "postgres":
+	case "postgres", "":
 		return "pg"
 	case "mysql":
 		return "my"
+	case "mongodb":
+		return "mo"
 	default:
 		if len(driver) > 2 {
 			return driver[:2]
 		}
 		return driver
+	}
+}
+
+func driverBadge(driver string) string {
+	switch driver {
+	case "mysql":
+		return manageDriverMyStyle.Render(driverShort(driver))
+	case "mongodb":
+		return manageDriverMoStyle.Render(driverShort(driver))
+	default:
+		return manageDriverPgStyle.Render(driverShort(driver))
+	}
+}
+
+func envBadge(env string) string {
+	if env == "" {
+		return ""
+	}
+	lower := strings.ToLower(env)
+	switch {
+	case strings.Contains(lower, "prod"):
+		return manageEnvProdStyle.Render(env)
+	case strings.Contains(lower, "stag"):
+		return manageEnvStagStyle.Render(env)
+	case strings.Contains(lower, "dev"), strings.Contains(lower, "local"):
+		return manageEnvDevStyle.Render(env)
+	default:
+		return HelpStyle.Render(env)
 	}
 }
 
