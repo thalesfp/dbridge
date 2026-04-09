@@ -9,7 +9,7 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 - **Multi-Connection Management**: Manage multiple database connections with named connections
 - **Multiple Output Formats**: Compact JSON (token-efficient for AI agents), table, and CSV
 - **Schema Inspection**: List schemas, tables, and describe table structures
-- **Read-Only Mode**: Safe query execution without risk of data modification
+- **Always Read-Only**: All connections are enforced read-only at the database level — PostgreSQL uses `default_transaction_read_only=on` in the connection string, MySQL issues `SET SESSION TRANSACTION READ ONLY` on every connection, and MongoDB blocks write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) in application code. There is no config option to disable this.
 
 ## Installation
 
@@ -189,6 +189,16 @@ connections:
     ssl_mode: "require"
     srv: true
 ```
+
+## Read-Only Enforcement
+
+Every dbridge connection is read-only by design. Enforcement happens at the database level, not just the application level:
+
+- **PostgreSQL** — `default_transaction_read_only=on` is appended to every connection string. The server rejects any write statement before it executes.
+- **MySQL** — `SET SESSION TRANSACTION READ ONLY` is issued on the pinned connection immediately after opening. Writes fail at the session level.
+- **MongoDB** — Write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) are blocked before the query is sent to the server.
+
+There is no `readonly` config field, no `--readonly` flag, and no way to open a writable connection through dbridge.
 
 ## Credential Storage
 
