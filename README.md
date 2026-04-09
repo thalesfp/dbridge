@@ -169,7 +169,6 @@ connections:
     database: "mydb"
     username: "admin"
     ssl_mode: "prefer"
-    readonly: false
     # Password stored in OS Keychain
 
   # MongoDB (standard)
