@@ -5,11 +5,11 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 ## Features
 
 - **Multi-Database Support**: PostgreSQL, MySQL, MongoDB
-- **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service) — passwords never stored in config files or logs
+- **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service). Passwords are never stored in config files or logs.
 - **Multi-Connection Management**: Manage multiple database connections with named connections
 - **Multiple Output Formats**: Compact JSON (token-efficient for AI agents), table, and CSV
 - **Schema Inspection**: List schemas, tables, and describe table structures
-- **Always Read-Only**: All connections are enforced read-only at the database level — PostgreSQL uses `default_transaction_read_only=on` in the connection string, MySQL issues `SET SESSION TRANSACTION READ ONLY` on every connection, and MongoDB blocks write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) in application code. There is no config option to disable this.
+- **Always Read-Only**: All connections are enforced read-only at the database level. PostgreSQL uses `default_transaction_read_only=on` in the connection string, MySQL issues `SET SESSION TRANSACTION READ ONLY` on every connection, and MongoDB blocks write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) in application code. There is no config option to disable this.
 
 ## Installation
 
@@ -105,7 +105,7 @@ dbridge config remove staging
 
 dbridge includes an MCP server that exposes read-only database tools over stdio.
 
-**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+**Claude Desktop** - add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -124,7 +124,7 @@ dbridge includes an MCP server that exposes read-only database tools over stdio.
 claude mcp add dbridge -- /path/to/dbridge mcp
 ```
 
-**Codex** — add to `~/.codex/config.toml`:
+**Codex** - add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.dbridge]
@@ -194,9 +194,9 @@ connections:
 
 Every dbridge connection is read-only by design. Enforcement happens at the database level, not just the application level:
 
-- **PostgreSQL** — `default_transaction_read_only=on` is appended to every connection string. The server rejects any write statement before it executes.
-- **MySQL** — `SET SESSION TRANSACTION READ ONLY` is issued on the pinned connection immediately after opening. Writes fail at the session level.
-- **MongoDB** — Write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) are blocked before the query is sent to the server.
+- **PostgreSQL** - `default_transaction_read_only=on` is appended to every connection string. The server rejects any write statement before it executes.
+- **MySQL** - `SET SESSION TRANSACTION READ ONLY` is issued on the pinned connection immediately after opening. Writes fail at the session level.
+- **MongoDB** - Write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) are blocked before the query is sent to the server.
 
 There is no `readonly` config field, no `--readonly` flag, and no way to open a writable connection through dbridge.
 
@@ -204,9 +204,9 @@ There is no `readonly` config field, no `--readonly` flag, and no way to open a 
 
 Credentials are stored in a **dedicated OS keychain named `dbridge`**, separate from your login keychain. The underlying library is [`99designs/keyring`](https://github.com/99designs/keyring), which maps to:
 
-- **macOS** — Keychain Access (`dbridge.keychain-db`)
-- **Windows** — Windows Credential Manager
-- **Linux** — Secret Service (GNOME Keyring / KWallet)
+- **macOS** - Keychain Access (`dbridge.keychain-db`)
+- **Windows** - Windows Credential Manager
+- **Linux** - Secret Service (GNOME Keyring / KWallet)
 
 Each connection's credentials are stored as `dbridge-<connection-name>` (e.g. `dbridge-local`). The config file (`~/.config/dbridge/config.yaml`) never contains passwords.
 
@@ -216,7 +216,7 @@ The dedicated `dbridge` keychain auto-locks after a period of inactivity or when
 
 To adjust the lock timeout on macOS:
 
-- Open **Keychain Access** → select the `dbridge` keychain → right-click **Change Settings for Keychain** → set the idle timeout or disable "Lock when sleeping"
+- Open **Keychain Access** -> select the `dbridge` keychain -> right-click **Change Settings for Keychain** -> set the idle timeout or disable "Lock when sleeping"
 - Or via terminal:
   ```bash
   # Lock after 1 hour (3600 seconds) of inactivity, don't lock on sleep
