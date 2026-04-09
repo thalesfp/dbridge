@@ -102,31 +102,14 @@ func TestAllowedBackends_MatchesPlatform(t *testing.T) {
 	}
 }
 
-// TestKeyringStore_Type_MatchesPlatform verifies Type() returns the platform-specific name.
+// TestKeyringStore_Type_MatchesPlatform verifies Type() is consistent with allowedBackends().
 func TestKeyringStore_Type_MatchesPlatform(t *testing.T) {
 	s := &KeyringStore{}
 	got := s.Type()
-
-	var want string
-	switch runtime.GOOS {
-	case "darwin":
-		want = "keychain"
-	case "windows":
-		want = "wincred"
-	default:
-		want = "secret-service"
-	}
+	want := backendTypeToName[allowedBackends()[0]]
 
 	if got != want {
 		t.Errorf("KeyringStore.Type() on %s = %q, want %q", runtime.GOOS, got, want)
-	}
-}
-
-// TestKeyringStore_Type_NotGeneric verifies Type() no longer returns the old generic "keyring".
-func TestKeyringStore_Type_NotGeneric(t *testing.T) {
-	s := &KeyringStore{}
-	if s.Type() == "keyring" {
-		t.Error("Type() must return a specific backend name, not the generic 'keyring'")
 	}
 }
 

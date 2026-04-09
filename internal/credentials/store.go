@@ -42,16 +42,22 @@ type KeyringStore struct {
 	service string
 }
 
-// allowedBackends returns the OS-native keychain backend for the current platform.
-// No fallback backends (file, pass) are allowed — if the OS keychain is unavailable,
-// keyring.Open will return an error rather than silently storing credentials elsewhere.
+// backendTypeToName maps each OS-native keychain backend to its display name.
+var backendTypeToName = map[keyring.BackendType]string{
+	keyring.KeychainBackend:      "keychain",
+	keyring.WinCredBackend:       "wincred",
+	keyring.SecretServiceBackend: "secret-service",
+}
+
+// allowedBackends returns the single OS-native keychain backend for the current platform.
+// If the OS keychain is unavailable, keyring.Open returns an error instead of falling back.
 func allowedBackends() []keyring.BackendType {
 	switch runtime.GOOS {
 	case "darwin":
 		return []keyring.BackendType{keyring.KeychainBackend}
 	case "windows":
 		return []keyring.BackendType{keyring.WinCredBackend}
-	default: // linux and other Unix
+	default:
 		return []keyring.BackendType{keyring.SecretServiceBackend}
 	}
 }
@@ -151,14 +157,7 @@ func (s *KeyringStore) Available() bool {
 
 // Type returns the OS-native keychain backend name
 func (s *KeyringStore) Type() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "keychain"
-	case "windows":
-		return "wincred"
-	default:
-		return "secret-service"
-	}
+	return backendTypeToName[allowedBackends()[0]]
 }
 
 // connectionKey generates the keychain key for a connection
