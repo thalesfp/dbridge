@@ -118,10 +118,10 @@ Examples:
 				connName := args[0]
 
 				// Validate required fields
-				if driver == "" {
-					return fmt.Errorf("--driver is required (postgres, mysql)")
-				}
 				validDrivers := dbpkg.DriverNames()
+				if driver == "" {
+					return fmt.Errorf("--driver is required (%s)", strings.Join(validDrivers, ", "))
+				}
 				driverValid := false
 				for _, d := range validDrivers {
 					if driver == d {
@@ -308,7 +308,7 @@ Examples:
 	}
 
 	// Add flags for non-interactive mode
-	cmd.Flags().StringVar(&driver, "driver", "", "Database driver (postgres, mysql) — required")
+	cmd.Flags().StringVar(&driver, "driver", "", fmt.Sprintf("Database driver (%s) — required", strings.Join(dbpkg.DriverNames(), ", ")))
 	cmd.Flags().StringVar(&host, "host", "localhost", "Database host")
 	cmd.Flags().IntVar(&port, "port", 0, "Database port (default: driver-specific)")
 	cmd.Flags().StringVar(&database, "database", "", "Database name (required for flag mode)")
@@ -352,7 +352,6 @@ func formatError(cmd *cobra.Command, code, message string, details interface{}) 
 	}
 	return fmt.Errorf("%s", message)
 }
-
 
 // newConfigListCmd creates the 'config list' command
 func newConfigListCmd() *cobra.Command {
@@ -730,7 +729,7 @@ func runConnectionTest(ctx context.Context, data *form.ConnectionData) *connecti
 func simplifyConnError(err error) string {
 	msg := err.Error()
 
-	// Match common error patterns across PostgreSQL and MySQL drivers
+	// Match common error patterns across the database drivers
 	lower := strings.ToLower(msg)
 
 	if strings.Contains(lower, "connection refused") {
@@ -739,7 +738,7 @@ func simplifyConnError(err error) string {
 	if strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out") {
 		return "connection timed out"
 	}
-	if strings.Contains(lower, "password authentication failed") || strings.Contains(lower, "access denied") {
+	if strings.Contains(lower, "password authentication failed") || strings.Contains(lower, "access denied") || strings.Contains(lower, "login failed for user") {
 		return "authentication failed (check username/password)"
 	}
 	if strings.Contains(lower, "does not exist") || strings.Contains(lower, "unknown database") {

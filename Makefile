@@ -49,6 +49,7 @@ test: ## Run unit tests
 test-integration: ## Run integration tests (requires docker-up)
 	TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5440/postgres?sslmode=disable" \
 	TEST_MYSQL_URL="dbridge:dbridge@tcp(localhost:3340)/dbridge_test" \
+	TEST_MSSQL_URL="sqlserver://sa:dbridge_Test1234@localhost:1440?database=master&encrypt=disable" \
 		go test -v -run Integration ./...
 
 .PHONY: test-coverage

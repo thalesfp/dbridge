@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  settings:
+    staticcheck:
+      # v2 merges gosimple + stylecheck + staticcheck into one linter. v1 ran
+      # neither stylecheck (ST*) nor the new quickfix (QF*) checks by default, so
+      # disable both categories to keep the existing lint baseline unchanged.
+      checks:
+        - all
+        - -ST*
+        - -QF*
+  exclusions:
+    # Restore the default exclusion presets that golangci-lint v1 enabled out of
+    # the box (errcheck on Close/fmt.Fprint*/os.Remove, etc.). v2 ships with no
+    # exclusions by default.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling

@@ -132,6 +132,41 @@ services:
     networks:
       - dbridge-test
 
+  dbridge-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: dbridge-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "dbridge_Test1234"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1440:1433"
+    volumes:
+      - ./test/fixtures/mssql_sample_data.sql:/fixtures/mssql_sample_data.sql:ro
+    # The mssql image has no auto-init dir, so start sqlservr, wait until it
+    # accepts connections, then load the fixture. The fixture creates a sentinel
+    # table last; the healthcheck gates on it so `up --wait` blocks until data is in.
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/mssql/bin/sqlservr &
+        pid=$$!
+        for i in $$(seq 1 60); do
+          /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -Q "SELECT 1" >/dev/null 2>&1 && break
+          sleep 1
+        done
+        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -b -d master -i /fixtures/mssql_sample_data.sql
+        wait $$pid
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -b -d master -Q \"SELECT 1 FROM dbo._dbridge_ready WHERE ok = 1\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    networks:
+      - dbridge-test
+
 networks:
   dbridge-test:
     driver: bridge

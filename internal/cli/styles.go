@@ -10,6 +10,7 @@ const (
 	ColorError   = lipgloss.Color("196") // red
 	ColorWarning = lipgloss.Color("214") // orange
 	ColorMuted   = lipgloss.Color("240") // dark gray
+	ColorViolet  = lipgloss.Color("170") // violet/magenta
 )
 
 // Shared TUI styles

@@ -23,11 +23,12 @@ var (
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(ColorWarning).
 				Padding(1, 3)
-	manageDialogTitle  = lipgloss.NewStyle().Foreground(ColorWarning).Bold(true)
-	manageDialogHint   = lipgloss.NewStyle().Foreground(ColorDim)
+	manageDialogTitle    = lipgloss.NewStyle().Foreground(ColorWarning).Bold(true)
+	manageDialogHint     = lipgloss.NewStyle().Foreground(ColorDim)
 	manageDriverPgStyle  = lipgloss.NewStyle().Foreground(ColorAccent)
 	manageDriverMyStyle  = lipgloss.NewStyle().Foreground(ColorWarning)
 	manageDriverMoStyle  = lipgloss.NewStyle().Foreground(ColorSuccess)
+	manageDriverMsStyle  = lipgloss.NewStyle().Foreground(ColorViolet)
 	manageDriverColStyle = lipgloss.NewStyle().Width(2)
 	manageEnvProdStyle   = lipgloss.NewStyle().Foreground(ColorError)
 	manageEnvStagStyle   = lipgloss.NewStyle().Foreground(ColorWarning)
@@ -307,6 +308,8 @@ func driverShort(driver string) string {
 		return "my"
 	case "mongodb":
 		return "mo"
+	case "mssql":
+		return "ms"
 	default:
 		if len(driver) > 2 {
 			return driver[:2]
@@ -321,6 +324,8 @@ func driverBadge(driver string) string {
 		return manageDriverMyStyle.Render(driverShort(driver))
 	case "mongodb":
 		return manageDriverMoStyle.Render(driverShort(driver))
+	case "mssql":
+		return manageDriverMsStyle.Render(driverShort(driver))
 	default:
 		return manageDriverPgStyle.Render(driverShort(driver))
 	}
