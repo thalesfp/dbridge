@@ -112,33 +112,44 @@ var mssqlReadLeaders = map[string]bool{
 	"values": true,
 }
 
-// mssqlWriteTokens are keywords that must never appear anywhere in a read query.
-// Besides the obvious DML/DDL, this includes session/admin verbs (use, set,
-// waitfor, kill, shutdown, reconfigure), transaction control (begin/commit/
-// rollback) and the distributed-query functions (openquery/openrowset/
-// opendatasource), which can hide writes inside their opaque string arguments.
-// These catch dangerous constructs stacked WITHOUT a separator (T-SQL allows
-// "SELECT 1 WAITFOR DELAY ..."); semicolon-separated batches are rejected
-// separately by mssqlCheckReadOnly. Every token here is a SQL Server reserved
-// keyword, so it can never be a bare identifier in a real read (those would be
-// bracketed or quoted, which the tokenizer skips).
+// mssqlWriteTokens are SQL Server RESERVED keywords that begin or constitute a
+// write, DDL, or server/session state change, so they must never appear anywhere in
+// a read query. The set is drawn from the reserved-keyword list and groups into:
+// DML/DDL, permissions (grant/revoke/deny), backup/restore (incl. legacy
+// dump/load), admin & session (use/set/waitfor/kill/shutdown/reconfigure/dbcc/
+// checkpoint), transaction control (begin/commit/rollback/save), impersonation
+// (setuser/revert), cursor/key management (open/close, which can change
+// session-bound cryptographic key state), procedure execution (exec/execute), the
+// distributed-query
+// functions (openquery/openrowset/opendatasource) which can hide writes in opaque
+// string arguments, the legacy text writes (writetext/updatetext) and trigger
+// management (the "trigger" keyword, which only appears in *.TRIGGER statements).
+//
+// Because every entry is reserved, it can never be a bare identifier in a real read
+// (those must be bracketed or quoted, which the tokenizer skips). These catch
+// dangerous constructs stacked WITHOUT a separator (T-SQL allows "SELECT 1 WAITFOR
+// DELAY ..."); semicolon-separated batches are rejected separately by
+// mssqlCheckReadOnly. NB: the reserved keyword "fetch" is intentionally excluded
+// because it is part of the read-only OFFSET/FETCH pagination clause.
 //
 // Lock hints (updlock/xlock/tablockx/holdlock/serializable/tablock/...) are
 // deliberately NOT policed: they acquire locks but do not mutate data, every query
-// runs in autocommit so the locks release when the statement finishes, and these
-// words are not reserved, so denylisting them would reject valid identifiers such
-// as "SELECT updlock FROM t". Telling a table-hint clause from an identifier needs
-// a real parser, which is out of proportion for a bounded, non-mutating effect.
+// runs in autocommit so the locks release when the statement finishes, and most are
+// not reserved, so denylisting them would reject valid identifiers such as
+// "SELECT updlock FROM t". Telling a table-hint clause from an identifier needs a
+// real parser, out of proportion for a bounded, non-mutating effect.
 var mssqlWriteTokens = map[string]bool{
 	"insert": true, "update": true, "delete": true, "merge": true,
 	"drop": true, "create": true, "alter": true, "truncate": true,
 	"into": true, "exec": true, "execute": true, "grant": true,
 	"revoke": true, "deny": true, "backup": true, "restore": true,
-	"dbcc": true, "bulk": true, "declare": true,
-	"use": true, "set": true, "waitfor": true, "kill": true,
-	"shutdown": true, "reconfigure": true,
-	"begin": true, "commit": true, "rollback": true,
+	"dump": true, "load": true, "dbcc": true, "bulk": true,
+	"declare": true, "use": true, "set": true, "waitfor": true,
+	"kill": true, "shutdown": true, "reconfigure": true, "checkpoint": true,
+	"begin": true, "commit": true, "rollback": true, "save": true,
+	"setuser": true, "revert": true, "open": true, "close": true,
 	"openquery": true, "openrowset": true, "opendatasource": true,
+	"writetext": true, "updatetext": true, "trigger": true,
 }
 
 var (
@@ -248,7 +259,10 @@ func mssqlTokenize(query string) []string {
 		case r == '-' && i+1 < n && runes[i+1] == '-':
 			flush()
 			i += 2
-			for i < n && runes[i] != '\n' {
+			// T-SQL ends a "--" comment at a line feed OR a bare carriage
+			// return (or CRLF). Stopping only at '\n' would let a CR-only line
+			// ending hide a following statement, e.g. "SELECT 1 -- x\rDROP ...".
+			for i < n && runes[i] != '\n' && runes[i] != '\r' {
 				i++
 			}
 

@@ -166,6 +166,8 @@ func TestMssqlCheckReadOnly(t *testing.T) {
 		"SELECT updlock FROM t",          // lock-hint words are not reserved; valid as identifiers
 		"SELECT * FROM dbo.xlock",        // a table named xlock is a valid read
 		"SELECT * FROM t WITH (UPDLOCK)", // lock hints are intentionally not policed (see mssqlWriteTokens)
+		"SELECT 1 -- note\rSELECT 2",     // CR ends the comment; the following read is fine
+		"SELECT enable, disabled FROM t", // enable/disable are not reserved; valid as identifiers
 	}
 	for _, q := range allowed {
 		t.Run("allow/"+q, func(t *testing.T) {
@@ -195,17 +197,33 @@ func TestMssqlCheckReadOnly(t *testing.T) {
 		"GRANT SELECT ON users TO bob",
 		"DBCC CHECKDB",
 		"BACKUP DATABASE mydb TO DISK = 'x'",
-		"SELECT 1; SELECT 2",                          // multi-statement batch (separator)
-		"SELECT 1; USE master",                        // session command stacked after read
-		"SELECT 1; WAITFOR DELAY '00:00:05'",          // DoS stacked after read
-		"SELECT 1; KILL 52",                           // kills another session
-		"SELECT 1; SET LOCK_TIMEOUT 0",                // session setting stacked after read
-		"SELECT 1; BEGIN TRANSACTION",                 // transaction control stacked after read
-		"SELECT 1 WAITFOR DELAY '00:00:05'",           // dangerous verb without a separator
-		"SELECT 1 KILL 52",                            // dangerous verb without a separator
-		"SELECT * FROM OPENQUERY(linked, 'SELECT 1')", // distributed query can hide writes
-		"SELECT NEXT VALUE FOR dbo.seq",               // advances a sequence (state change)
-		"SELECT NEXT VALUE FOR seq AS n",              // sequence advance in any position
+		"SELECT 1; SELECT 2",                                         // multi-statement batch (separator)
+		"SELECT 1; USE master",                                       // session command stacked after read
+		"SELECT 1; WAITFOR DELAY '00:00:05'",                         // DoS stacked after read
+		"SELECT 1; KILL 52",                                          // kills another session
+		"SELECT 1; SET LOCK_TIMEOUT 0",                               // session setting stacked after read
+		"SELECT 1; BEGIN TRANSACTION",                                // transaction control stacked after read
+		"SELECT 1 WAITFOR DELAY '00:00:05'",                          // dangerous verb without a separator
+		"SELECT 1 KILL 52",                                           // dangerous verb without a separator
+		"SELECT * FROM OPENQUERY(linked, 'SELECT 1')",                // distributed query can hide writes
+		"SELECT NEXT VALUE FOR dbo.seq",                              // advances a sequence (state change)
+		"SELECT NEXT VALUE FOR seq AS n",                             // sequence advance in any position
+		"SELECT 1 -- x\rDROP TABLE t",                                // CR-only comment hides a following write
+		"SELECT 1 -- x\r\nUPDATE t SET a = 1",                        // CRLF comment then write
+		"SELECT 1 WRITETEXT a.b @p '0x'",                             // legacy text-mutating statement
+		"SELECT 1 UPDATETEXT a.b @p 0 0 '0x'",                        // legacy text-mutating statement
+		"SELECT 1 DISABLE TRIGGER trg ON tbl",                        // trigger state change (no separator)
+		"SELECT 1 ENABLE TRIGGER trg ON tbl",                         // trigger state change (no separator)
+		"SELECT 1 -- c\rDISABLE TRIGGER ALL ON DATABASE",             // trigger change hidden after CR comment
+		"SELECT 1 SETUSER 'dbo'",                                     // impersonation (session identity change)
+		"SELECT 1 -- c\rSETUSER 'dbo' WITH NORESET",                  // impersonation hidden after CR comment
+		"SELECT 1 REVERT",                                            // reverts impersonation context
+		"SELECT 1 SAVE TRANSACTION sp",                               // transaction savepoint
+		"SELECT 1 CHECKPOINT",                                        // forces a database checkpoint
+		"SELECT 1 DUMP DATABASE x TO DISK = 'y'",                     // legacy backup
+		"SELECT 1 LOAD DATABASE x FROM DISK = 'y'",                   // legacy restore
+		"SELECT 1 OPEN SYMMETRIC KEY k DECRYPTION BY PASSWORD = 'p'", // changes session key state
+		"SELECT 1 CLOSE ALL SYMMETRIC KEYS",                          // changes session key state
 	}
 	for _, q := range rejected {
 		t.Run("reject/"+q, func(t *testing.T) {
