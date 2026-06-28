@@ -117,9 +117,18 @@ var mssqlReadLeaders = map[string]bool{
 // waitfor, kill, shutdown, reconfigure), transaction control (begin/commit/
 // rollback) and the distributed-query functions (openquery/openrowset/
 // opendatasource), which can hide writes inside their opaque string arguments.
-// These catch dangerous statements stacked WITHOUT a separator (T-SQL allows
+// These catch dangerous constructs stacked WITHOUT a separator (T-SQL allows
 // "SELECT 1 WAITFOR DELAY ..."); semicolon-separated batches are rejected
-// separately by mssqlCheckReadOnly.
+// separately by mssqlCheckReadOnly. Every token here is a SQL Server reserved
+// keyword, so it can never be a bare identifier in a real read (those would be
+// bracketed or quoted, which the tokenizer skips).
+//
+// Lock hints (updlock/xlock/tablockx/holdlock/serializable/tablock/...) are
+// deliberately NOT policed: they acquire locks but do not mutate data, every query
+// runs in autocommit so the locks release when the statement finishes, and these
+// words are not reserved, so denylisting them would reject valid identifiers such
+// as "SELECT updlock FROM t". Telling a table-hint clause from an identifier needs
+// a real parser, which is out of proportion for a bounded, non-mutating effect.
 var mssqlWriteTokens = map[string]bool{
 	"insert": true, "update": true, "delete": true, "merge": true,
 	"drop": true, "create": true, "alter": true, "truncate": true,
@@ -140,7 +149,7 @@ var (
 // mssqlCheckReadOnly rejects any statement that is not provably a read.
 //
 // It tokenizes the query (skipping string literals, quoted/bracketed identifiers
-// and comments, and emitting ";" as a statement separator), then applies three
+// and comments, and emitting ";" as a statement separator), then applies these
 // rules:
 //
 //  1. The first word token must be select/with/values.
@@ -154,6 +163,10 @@ var (
 //     allows ("SELECT 1 DROP TABLE t"), plus SELECT...INTO, CTE writes and the
 //     DECLARE/EXEC sp_executesql bypass. Real identifiers with those names must
 //     be bracketed or quoted, which the tokenizer skips.
+//  4. The sequence-advancing phrase "NEXT VALUE FOR" is rejected. It is a valid
+//     read expression but mutates server state (advances a sequence). The trailing
+//     "for" is required so columns literally named "next"/"value" stay allowed;
+//     bracketing them sidesteps the check entirely.
 //
 // Semicolon-less all-read batches ("SELECT 1 SELECT 2") are not detectable without
 // a parser and are harmless, so they are allowed. This is best-effort protection
@@ -163,6 +176,7 @@ func mssqlCheckReadOnly(query string) error {
 
 	seenWord := false
 	sepAfterWord := false
+	var prev2, prev1 string
 
 	for _, tok := range tokens {
 		if tok == ";" {
@@ -189,6 +203,11 @@ func mssqlCheckReadOnly(query string) error {
 		if strings.HasPrefix(low, "sp_") || strings.HasPrefix(low, "xp_") {
 			return mssqlReadOnlyErr
 		}
+		if prev2 == "next" && prev1 == "value" && low == "for" {
+			return mssqlReadOnlyErr
+		}
+
+		prev2, prev1 = prev1, low
 	}
 
 	if !seenWord {

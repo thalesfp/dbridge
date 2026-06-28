@@ -161,7 +161,11 @@ func TestMssqlCheckReadOnly(t *testing.T) {
 		"(SELECT 1)",                                      // parenthesized leading select
 		";WITH cte AS (SELECT 1 AS id) SELECT * FROM cte", // leading ;WITH idiom
 		"SELECT id FROM t ORDER BY id OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY", // pagination
-		"SELECT ';' AS x", // semicolon inside a string literal is not a separator
+		"SELECT ';' AS x",                // semicolon inside a string literal is not a separator
+		"SELECT next, value FROM t",      // columns named next/value (no FOR) stay allowed
+		"SELECT updlock FROM t",          // lock-hint words are not reserved; valid as identifiers
+		"SELECT * FROM dbo.xlock",        // a table named xlock is a valid read
+		"SELECT * FROM t WITH (UPDLOCK)", // lock hints are intentionally not policed (see mssqlWriteTokens)
 	}
 	for _, q := range allowed {
 		t.Run("allow/"+q, func(t *testing.T) {
@@ -200,6 +204,8 @@ func TestMssqlCheckReadOnly(t *testing.T) {
 		"SELECT 1 WAITFOR DELAY '00:00:05'",           // dangerous verb without a separator
 		"SELECT 1 KILL 52",                            // dangerous verb without a separator
 		"SELECT * FROM OPENQUERY(linked, 'SELECT 1')", // distributed query can hide writes
+		"SELECT NEXT VALUE FOR dbo.seq",               // advances a sequence (state change)
+		"SELECT NEXT VALUE FOR seq AS n",              // sequence advance in any position
 	}
 	for _, q := range rejected {
 		t.Run("reject/"+q, func(t *testing.T) {
