@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -131,7 +132,10 @@ var mssqlWriteTokens = map[string]bool{
 	"openquery": true, "openrowset": true, "opendatasource": true,
 }
 
-const mssqlReadOnlyErr = "read-only connection: only read queries are permitted"
+var (
+	mssqlReadOnlyErr = errors.New("read-only connection: only read queries are permitted")
+	mssqlDeadConnErr = errors.New("connection is closed after a failed showplan cleanup")
+)
 
 // mssqlCheckReadOnly rejects any statement that is not provably a read.
 //
@@ -173,22 +177,22 @@ func mssqlCheckReadOnly(query string) error {
 		if !seenWord {
 			seenWord = true
 			if !mssqlReadLeaders[low] {
-				return fmt.Errorf("%s", mssqlReadOnlyErr)
+				return mssqlReadOnlyErr
 			}
 		} else if sepAfterWord {
-			return fmt.Errorf("%s", mssqlReadOnlyErr)
+			return mssqlReadOnlyErr
 		}
 
 		if mssqlWriteTokens[low] {
-			return fmt.Errorf("%s", mssqlReadOnlyErr)
+			return mssqlReadOnlyErr
 		}
 		if strings.HasPrefix(low, "sp_") || strings.HasPrefix(low, "xp_") {
-			return fmt.Errorf("%s", mssqlReadOnlyErr)
+			return mssqlReadOnlyErr
 		}
 	}
 
 	if !seenWord {
-		return fmt.Errorf("%s", mssqlReadOnlyErr)
+		return mssqlReadOnlyErr
 	}
 
 	return nil
@@ -338,7 +342,7 @@ func mssqlTypeName(typ string) string {
 // Query executes a read-only SELECT query.
 func (c *MssqlConnection) Query(ctx context.Context, sqlStr string, args ...interface{}) (*QueryResult, error) {
 	if c.dead {
-		return nil, fmt.Errorf("connection is closed after a failed showplan cleanup")
+		return nil, mssqlDeadConnErr
 	}
 	if err := mssqlCheckReadOnly(sqlStr); err != nil {
 		return nil, err
@@ -416,7 +420,7 @@ func (c *MssqlConnection) Query(ctx context.Context, sqlStr string, args ...inte
 // Exec is rejected: dbridge connections are read-only and SQL Server cannot enforce
 // that at the session level, so writes are refused in application code.
 func (c *MssqlConnection) Exec(ctx context.Context, sqlStr string, args ...interface{}) (*ExecResult, error) {
-	return nil, fmt.Errorf("%s", mssqlReadOnlyErr)
+	return nil, mssqlReadOnlyErr
 }
 
 // Schema returns schema inspector.
@@ -562,7 +566,7 @@ func (s *MssqlSchemaInspector) DescribeTable(ctx context.Context, schema, table 
 // so on cleanup failure the pinned connection is closed and marked dead.
 func (s *MssqlSchemaInspector) ExplainQuery(ctx context.Context, sqlStr string) (*ExplainResult, error) {
 	if s.conn.dead {
-		return nil, fmt.Errorf("connection is closed after a failed showplan cleanup")
+		return nil, mssqlDeadConnErr
 	}
 	if err := mssqlCheckReadOnly(sqlStr); err != nil {
 		return nil, err
@@ -600,19 +604,16 @@ func (s *MssqlSchemaInspector) fetchPlan(ctx context.Context, sqlStr string) (st
 	}
 	defer rows.Close()
 
-	var plan string
-	gotRow := false
-	if rows.Next() {
-		gotRow = true
-		if err := rows.Scan(&plan); err != nil {
-			return "", fmt.Errorf("failed to scan plan: %w", err)
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return "", err
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return "", err
-	}
-	if !gotRow {
 		return "", fmt.Errorf("SHOWPLAN_XML returned no rows")
+	}
+
+	var plan string
+	if err := rows.Scan(&plan); err != nil {
+		return "", fmt.Errorf("failed to scan plan: %w", err)
 	}
 
 	return plan, nil

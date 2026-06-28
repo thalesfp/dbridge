@@ -23,12 +23,12 @@ var (
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(ColorWarning).
 				Padding(1, 3)
-	manageDialogTitle  = lipgloss.NewStyle().Foreground(ColorWarning).Bold(true)
-	manageDialogHint   = lipgloss.NewStyle().Foreground(ColorDim)
+	manageDialogTitle    = lipgloss.NewStyle().Foreground(ColorWarning).Bold(true)
+	manageDialogHint     = lipgloss.NewStyle().Foreground(ColorDim)
 	manageDriverPgStyle  = lipgloss.NewStyle().Foreground(ColorAccent)
 	manageDriverMyStyle  = lipgloss.NewStyle().Foreground(ColorWarning)
 	manageDriverMoStyle  = lipgloss.NewStyle().Foreground(ColorSuccess)
-	manageDriverMsStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("170"))
+	manageDriverMsStyle  = lipgloss.NewStyle().Foreground(ColorViolet)
 	manageDriverColStyle = lipgloss.NewStyle().Width(2)
 	manageEnvProdStyle   = lipgloss.NewStyle().Foreground(ColorError)
 	manageEnvStagStyle   = lipgloss.NewStyle().Foreground(ColorWarning)
