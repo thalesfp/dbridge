@@ -64,6 +64,7 @@ var driverDefaults = map[string]DriverDefaults{
 	"postgres": {5432, "verify-full"},
 	"mysql":    {3306, "verify-full"},
 	"mongodb":  {27017, "verify-full"},
+	"mssql":    {1433, "verify-full"},
 }
 
 // DriverDefaultsMap returns the driver defaults map for external use.

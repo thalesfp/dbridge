@@ -214,7 +214,7 @@ func sslOptions(driver string) []selectOption {
 
 func driverOptions() []selectOption {
 	return []selectOption{
-		{"PostgreSQL", "postgres"}, {"MySQL", "mysql"}, {"MongoDB", "mongodb"},
+		{"PostgreSQL", "postgres"}, {"MySQL", "mysql"}, {"MongoDB", "mongodb"}, {"SQL Server", "mssql"},
 	}
 }
 

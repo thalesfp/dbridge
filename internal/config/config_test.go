@@ -379,6 +379,31 @@ func TestGetConnection_DriverDefaults(t *testing.T) {
 		}
 	})
 
+	t.Run("mssql driver defaults to port 1433", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.AddConnection(&Connection{
+			Name:     "ms-db",
+			Driver:   "mssql",
+			Host:     "localhost",
+			Database: "testdb",
+			Username: "sa",
+		})
+
+		p, err := cfg.GetConnection("ms-db")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if p.Driver != "mssql" {
+			t.Errorf("Expected driver 'mssql', got '%s'", p.Driver)
+		}
+		if p.Port != 1433 {
+			t.Errorf("Expected port 1433, got %d", p.Port)
+		}
+		if p.SSLMode != "verify-full" {
+			t.Errorf("Expected ssl 'verify-full', got '%s'", p.SSLMode)
+		}
+	})
+
 	t.Run("explicit port and ssl override driver defaults", func(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.AddConnection(&Connection{

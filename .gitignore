@@ -43,6 +43,7 @@ build/
 !.github/**/*.yaml
 !docker-compose.yml
 !.goreleaser.yaml
+!.golangci.yml
 config.yaml
 config.yml
 credentials.enc

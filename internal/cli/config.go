@@ -119,7 +119,7 @@ Examples:
 
 				// Validate required fields
 				if driver == "" {
-					return fmt.Errorf("--driver is required (postgres, mysql)")
+					return fmt.Errorf("--driver is required (postgres, mysql, mongodb, mssql)")
 				}
 				validDrivers := dbpkg.DriverNames()
 				driverValid := false
@@ -308,7 +308,7 @@ Examples:
 	}
 
 	// Add flags for non-interactive mode
-	cmd.Flags().StringVar(&driver, "driver", "", "Database driver (postgres, mysql) — required")
+	cmd.Flags().StringVar(&driver, "driver", "", "Database driver (postgres, mysql, mongodb, mssql) — required")
 	cmd.Flags().StringVar(&host, "host", "localhost", "Database host")
 	cmd.Flags().IntVar(&port, "port", 0, "Database port (default: driver-specific)")
 	cmd.Flags().StringVar(&database, "database", "", "Database name (required for flag mode)")
@@ -739,7 +739,7 @@ func simplifyConnError(err error) string {
 	if strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out") {
 		return "connection timed out"
 	}
-	if strings.Contains(lower, "password authentication failed") || strings.Contains(lower, "access denied") {
+	if strings.Contains(lower, "password authentication failed") || strings.Contains(lower, "access denied") || strings.Contains(lower, "login failed for user") {
 		return "authentication failed (check username/password)"
 	}
 	if strings.Contains(lower, "does not exist") || strings.Contains(lower, "unknown database") {

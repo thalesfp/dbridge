@@ -4,12 +4,12 @@ A cross-platform database CLI tool with MCP (Model Context Protocol) server supp
 
 ## Features
 
-- **Multi-Database Support**: PostgreSQL, MySQL, MongoDB
+- **Multi-Database Support**: PostgreSQL, MySQL, MongoDB, SQL Server
 - **Secure Credential Storage**: Uses OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service). Passwords are never stored in config files or logs.
 - **Multi-Connection Management**: Manage multiple database connections with named connections
 - **Multiple Output Formats**: Compact JSON (token-efficient for AI agents), table, and CSV
 - **Schema Inspection**: List schemas, tables, and describe table structures
-- **Always Read-Only**: All connections are enforced read-only at the database level. PostgreSQL uses `default_transaction_read_only=on` in the connection string, MySQL issues `SET SESSION TRANSACTION READ ONLY` on every connection, and MongoDB blocks write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) in application code. There is no config option to disable this.
+- **Always Read-Only**: All connections are read-only by design. PostgreSQL uses `default_transaction_read_only=on` in the connection string, MySQL issues `SET SESSION TRANSACTION READ ONLY` on every connection, MongoDB blocks write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) in application code, and SQL Server sets `ApplicationIntent=ReadOnly` plus an application-level write-statement guard. There is no config option to disable this. (SQL Server has no session-level read-only switch, so its guarantee is weaker than the others — see [Read-Only Enforcement](#read-only-enforcement).)
 
 ## Installation
 
@@ -45,8 +45,8 @@ make clean            # Remove build artifacts
 
 ### Dependencies
 
-- Go 1.24+
-- PostgreSQL 12+, MySQL 8.0+, and/or MongoDB 4.4+ (depending on which databases you connect to)
+- Go 1.25+
+- PostgreSQL 12+, MySQL 8.0+, MongoDB 4.4+, and/or SQL Server 2017+ (depending on which databases you connect to)
 
 ## Quick Start
 
@@ -200,15 +200,27 @@ connections:
     username: "admin"
     ssl_mode: "require"
     srv: true
+
+  # SQL Server
+  mssql-local:
+    driver: "mssql"
+    host: "localhost"
+    port: 1433
+    database: "myapp"
+    username: "sa"
+    ssl_mode: "verify-full"
 ```
 
 ## Read-Only Enforcement
 
-Every dbridge connection is read-only by design. Enforcement happens at the database level, not just the application level:
+Every dbridge connection is read-only by design:
 
 - **PostgreSQL** - `default_transaction_read_only=on` is appended to every connection string. The server rejects any write statement before it executes.
 - **MySQL** - `SET SESSION TRANSACTION READ ONLY` is issued on the pinned connection immediately after opening. Writes fail at the session level.
 - **MongoDB** - Write pipeline stages (`$out`, `$merge`) and server-side JavaScript operators (`$where`, `$function`, `$accumulator`) are blocked before the query is sent to the server.
+- **SQL Server** - `ApplicationIntent=ReadOnly` is set on the connection (which routes to a readable secondary in an Always On availability group), and every query is screened by an application-level guard that rejects anything that is not a plain read (`INSERT`, `UPDATE`, `DELETE`, `MERGE`, `SELECT ... INTO`, `EXEC`/`sp_executesql`, DDL, stacked statements, etc.). `Exec` is refused outright.
+
+> **SQL Server caveat:** unlike PostgreSQL and MySQL, SQL Server has no session-level read-only switch. The guard above is best-effort protection against accidental writes, **not** a hardened security boundary. For a guaranteed read-only connection, point dbridge at a login that only has read permissions (e.g. a user in the `db_datareader` role).
 
 There is no `readonly` config field, no `--readonly` flag, and no way to open a writable connection through dbridge.
 
