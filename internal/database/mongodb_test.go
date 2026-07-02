@@ -287,6 +287,52 @@ func TestValidatePipelineReadOnly_DangerousNestedOperators(t *testing.T) {
 	}
 }
 
+// TestValidateReadOnly_NestedJSFromJSON exercises the real decode path:
+// parseMongoQuery uses encoding/json, which yields map[string]interface{} and
+// []interface{} for nested objects/arrays (not bson.M/bson.A). A JS operator
+// nested even one level deep must still be rejected. The bson.M-literal tests
+// above cannot catch this gap because their nested values are already bson.M.
+func TestValidateReadOnly_NestedJSFromJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+	}{
+		{"top-level $where", `{"collection":"c","filter":{"$where":"1"}}`, true},
+		{"$where nested in $and", `{"collection":"c","filter":{"$and":[{"$where":"1"}]}}`, true},
+		{"$where nested in subdocument", `{"collection":"c","filter":{"a":{"$where":"1"}}}`, true},
+		{"$function nested in $or", `{"collection":"c","filter":{"$or":[{"$function":{"body":"x"}}]}}`, true},
+		{"$accumulator nested in array", `{"collection":"c","filter":{"x":[{"$accumulator":{"init":"f"}}]}}`, true},
+		{"aggregate $match $where", `{"collection":"c","aggregate":[{"$match":{"$where":"1"}}]}`, true},
+		{"aggregate nested $function", `{"collection":"c","aggregate":[{"$addFields":{"y":{"$function":{"body":"x"}}}}]}`, true},
+		{"benign nested $and", `{"collection":"c","filter":{"$and":[{"age":{"$gt":21}}]}}`, false},
+		{"benign subdocument", `{"collection":"c","filter":{"user":{"name":"alice"}}}`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := parseMongoQuery(tt.query)
+			if err != nil {
+				t.Fatalf("parseMongoQuery failed: %v", err)
+			}
+
+			var validationErr error
+			if len(q.Aggregate) > 0 {
+				validationErr = validatePipelineReadOnly(q.Aggregate)
+			} else {
+				validationErr = validateDocReadOnly(q.Filter, 0)
+			}
+
+			if tt.wantErr && validationErr == nil {
+				t.Errorf("expected nested JS operator to be rejected, got nil")
+			}
+			if !tt.wantErr && validationErr != nil {
+				t.Errorf("unexpected rejection of benign query: %v", validationErr)
+			}
+		})
+	}
+}
+
 func TestMongoDriverRegistered(t *testing.T) {
 	names := DriverNames()
 	found := false

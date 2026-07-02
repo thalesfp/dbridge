@@ -211,6 +211,13 @@ func validateValueReadOnly(val interface{}, depth int) error {
 	switch v := val.(type) {
 	case bson.M:
 		return validateDocReadOnly(v, depth)
+	// The query JSON is decoded with encoding/json, which produces the concrete
+	// types map[string]interface{} and []interface{} for nested objects/arrays,
+	// NOT bson.M/bson.A (bson.M is a defined type, not an alias). Without these
+	// cases a JS operator nested even one level deep (e.g. {"$and":[{"$where":...}]})
+	// would slip past the read-only guard.
+	case map[string]interface{}:
+		return validateDocReadOnly(bson.M(v), depth)
 	case bson.D:
 		for _, elem := range v {
 			if jsOperators[elem.Key] {
@@ -221,6 +228,12 @@ func validateValueReadOnly(val interface{}, depth int) error {
 			}
 		}
 	case bson.A:
+		for _, elem := range v {
+			if err := validateValueReadOnly(elem, depth); err != nil {
+				return err
+			}
+		}
+	case []interface{}:
 		for _, elem := range v {
 			if err := validateValueReadOnly(elem, depth); err != nil {
 				return err
