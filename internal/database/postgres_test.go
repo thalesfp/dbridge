@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TestGetTypeName tests PostgreSQL type OID to name conversion
@@ -92,6 +94,41 @@ func TestBuildPgConnString_AlwaysReadOnly(t *testing.T) {
 	cs := buildPgConnString(&cfg)
 	if !strings.Contains(cs, "default_transaction_read_only=on") {
 		t.Errorf("connection string must always contain default_transaction_read_only=on, got: %s", cs)
+	}
+}
+
+// TestBuildPgConnString_EscapesMetacharacters verifies that credentials and
+// fields containing URL metacharacters are escaped, so they round-trip through
+// the parser instead of breaking the DSN or injecting parameters (e.g. a
+// database name that smuggles in sslmode=disable / read_only=off).
+func TestBuildPgConnString_EscapesMetacharacters(t *testing.T) {
+	cfg := ConnectionConfig{
+		Host:     "localhost",
+		Port:     5432,
+		Database: "mydb?sslmode=disable&default_transaction_read_only=off",
+		Username: "ad min",
+		Password: "p@ss:w/ord?&x=1",
+		SSLMode:  "verify-full",
+	}
+
+	pc, err := pgxpool.ParseConfig(buildPgConnString(&cfg))
+	if err != nil {
+		t.Fatalf("connection string must parse, got error: %v", err)
+	}
+	if pc.ConnConfig.User != cfg.Username {
+		t.Errorf("username = %q, want %q", pc.ConnConfig.User, cfg.Username)
+	}
+	if pc.ConnConfig.Password != cfg.Password {
+		t.Errorf("password = %q, want %q", pc.ConnConfig.Password, cfg.Password)
+	}
+	if pc.ConnConfig.Database != cfg.Database {
+		t.Errorf("database = %q, want %q", pc.ConnConfig.Database, cfg.Database)
+	}
+	if got := pc.ConnConfig.RuntimeParams["default_transaction_read_only"]; got != "on" {
+		t.Errorf("default_transaction_read_only = %q, want \"on\" (injection must not override it)", got)
+	}
+	if pc.ConnConfig.TLSConfig == nil {
+		t.Error("TLS must remain enabled for verify-full; injection must not disable it")
 	}
 }
 

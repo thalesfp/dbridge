@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,20 +45,31 @@ type PgxConnection struct {
 }
 
 // buildPgConnString builds a PostgreSQL connection string from the config.
+// Uses net/url so that credentials, host and database containing URL
+// metacharacters are escaped rather than breaking or injecting DSN parameters
+// (e.g. an unescaped "?sslmode=disable" could silently downgrade TLS).
 func buildPgConnString(config *ConnectionConfig) string {
-	connString := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		config.Username,
-		config.Password,
-		config.Host,
-		config.Port,
-		config.Database,
-		config.SSLMode,
-	)
+	query := url.Values{}
+	if config.SSLMode != "" {
+		query.Set("sslmode", config.SSLMode)
+	}
+	query.Set("default_transaction_read_only", "on")
 
-	connString += "&default_transaction_read_only=on"
+	var user *url.Userinfo
+	if config.Password != "" {
+		user = url.UserPassword(config.Username, config.Password)
+	} else {
+		user = url.User(config.Username)
+	}
 
-	return connString
+	u := &url.URL{
+		Scheme:   "postgres",
+		User:     user,
+		Host:     fmt.Sprintf("%s:%d", config.Host, config.Port),
+		Path:     "/" + config.Database,
+		RawQuery: query.Encode(),
+	}
+	return u.String()
 }
 
 // Query executes a SELECT query
