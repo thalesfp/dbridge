@@ -70,6 +70,12 @@ func buildMysqlDSN(config *ConnectionConfig) string {
 }
 
 // mapSSLToMysqlTLS maps dbridge ssl_mode values to MySQL tls parameter values.
+//
+// "require" means encrypt but do not verify the server certificate (matching
+// libpq semantics), which is go-sql-driver's "skip-verify". "verify-ca" and
+// "verify-full" both map to "true" (full chain + hostname verification); the
+// driver has no CA-only-without-hostname preset, so verify-ca is treated as
+// verify-full.
 func mapSSLToMysqlTLS(sslMode string) string {
 	switch strings.ToLower(sslMode) {
 	case "disable":
@@ -77,7 +83,7 @@ func mapSSLToMysqlTLS(sslMode string) string {
 	case "prefer", "preferred":
 		return "preferred"
 	case "require":
-		return "true"
+		return "skip-verify"
 	case "verify-ca":
 		return "true"
 	case "verify-full":

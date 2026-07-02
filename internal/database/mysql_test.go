@@ -50,7 +50,7 @@ func TestBuildMysqlDSN(t *testing.T) {
 				Password: "pass",
 				SSLMode:  "require",
 			},
-			expected: "admin:pass@tcp(db.example.com:3306)/app?parseTime=true&tls=true",
+			expected: "admin:pass@tcp(db.example.com:3306)/app?parseTime=true&tls=skip-verify",
 		},
 	}
 
@@ -100,7 +100,7 @@ func TestMapSSLToMysqlTLS(t *testing.T) {
 		{"disable", "false"},
 		{"prefer", "preferred"},
 		{"preferred", "preferred"},
-		{"require", "true"},
+		{"require", "skip-verify"},
 		{"verify-ca", "true"},
 		{"verify-full", "true"},
 		{"", "true"},          // unknown defaults to secure
