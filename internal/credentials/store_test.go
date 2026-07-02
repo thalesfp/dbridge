@@ -55,6 +55,33 @@ func (m *MockStore) Type() string {
 	return "mock"
 }
 
+// TestEncodeDecodeCredentials_RoundTrip verifies JSON serialization round-trips,
+// including values that broke the legacy colon format (colons in the username).
+func TestEncodeDecodeCredentials_RoundTrip(t *testing.T) {
+	cases := []Credentials{
+		{Username: "user", Password: "pass"},
+		{Username: "user:with:colons", Password: "p@ss:w/ord?"},
+		{Username: "", Password: "only-password"},
+		{Username: "user", Password: ""},
+	}
+	for _, want := range cases {
+		got := decodeCredentials(encodeCredentials(want))
+		if got != want {
+			t.Errorf("round-trip = %+v, want %+v", got, want)
+		}
+	}
+}
+
+// TestDecodeCredentials_LegacyFormats verifies old keychain entries still load.
+func TestDecodeCredentials_LegacyFormats(t *testing.T) {
+	if got := decodeCredentials([]byte("admin:secret")); got.Username != "admin" || got.Password != "secret" {
+		t.Errorf("legacy colon form = %+v, want {admin secret}", got)
+	}
+	if got := decodeCredentials([]byte("barepassword")); got.Username != "" || got.Password != "barepassword" {
+		t.Errorf("legacy bare password = %+v, want {\"\" barepassword}", got)
+	}
+}
+
 // TestAllowedBackends_OsNativeOnly verifies that allowedBackends returns exactly
 // one backend and that it is not a fallback backend (file or pass).
 func TestAllowedBackends_OsNativeOnly(t *testing.T) {

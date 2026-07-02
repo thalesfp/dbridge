@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime"
@@ -84,14 +85,44 @@ func NewKeyringStore(serviceName string) (*KeyringStore, error) {
 	}, nil
 }
 
+// storedCredential is the on-disk (keychain) JSON representation of a credential.
+type storedCredential struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// encodeCredentials serializes credentials as JSON. Marshaling a fixed struct of
+// strings cannot fail, so the error is intentionally ignored.
+func encodeCredentials(creds Credentials) []byte {
+	data, _ := json.Marshal(storedCredential{Username: creds.Username, Password: creds.Password})
+	return data
+}
+
+// decodeCredentials parses a stored credential. Current entries are JSON; older
+// entries are the legacy "username:password" form, or (oldest) a bare password.
+// Legacy values never start with '{', so they can't be mistaken for JSON.
+func decodeCredentials(data []byte) Credentials {
+	s := string(data)
+
+	if len(s) > 0 && s[0] == '{' {
+		var sc storedCredential
+		if err := json.Unmarshal(data, &sc); err == nil {
+			return Credentials{Username: sc.Username, Password: sc.Password}
+		}
+	}
+
+	if parts := strings.SplitN(s, ":", 2); len(parts) == 2 {
+		return Credentials{Username: parts[0], Password: parts[1]}
+	}
+
+	return Credentials{Password: s}
+}
+
 // Save stores credentials in the keychain
 func (s *KeyringStore) Save(ctx context.Context, connection string, creds Credentials) error {
-	// Store username and password as a single item with JSON
-	data := fmt.Sprintf("%s:%s", creds.Username, creds.Password)
-
 	err := s.keyring.Set(keyring.Item{
 		Key:   s.connectionKey(connection),
-		Data:  []byte(data),
+		Data:  encodeCredentials(creds),
 		Label: fmt.Sprintf("dbridge-%s", connection),
 	})
 	if err != nil {
@@ -111,22 +142,7 @@ func (s *KeyringStore) Load(ctx context.Context, connection string) (Credentials
 		return Credentials{}, fmt.Errorf("failed to load credentials: %w", err)
 	}
 
-	// Parse username:password format
-	data := string(item.Data)
-
-	// Split by first colon
-	parts := strings.SplitN(data, ":", 2)
-	if len(parts) == 2 {
-		return Credentials{
-			Username: parts[0],
-			Password: parts[1],
-		}, nil
-	}
-
-	// Fallback: treat whole data as password (for backward compatibility)
-	return Credentials{
-		Password: data,
-	}, nil
+	return decodeCredentials(item.Data), nil
 }
 
 // Delete removes credentials from the keychain
