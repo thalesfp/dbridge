@@ -19,7 +19,7 @@ func handleQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	conn, err := getConnection(connName)
+	conn, err := getConnection(ctx, connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -95,7 +95,7 @@ func handleListSchemas(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	conn, err := getConnection(connName)
+	conn, err := getConnection(ctx, connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -126,7 +126,7 @@ func handleListTables(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 	}
 	schema := request.GetString("schema", "public")
 
-	conn, err := getConnection(connName)
+	conn, err := getConnection(ctx, connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -161,7 +161,7 @@ func handleDescribeTable(ctx context.Context, request mcp.CallToolRequest) (*mcp
 	}
 	schema := request.GetString("schema", "public")
 
-	conn, err := getConnection(connName)
+	conn, err := getConnection(ctx, connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -190,7 +190,7 @@ func handleExplainQuery(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	conn, err := getConnection(connName)
+	conn, err := getConnection(ctx, connName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

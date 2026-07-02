@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
@@ -99,7 +101,12 @@ func main() {
 	rootCmd.AddCommand(cli.NewSchemaCmd())
 	rootCmd.AddCommand(cli.NewMCPCmd())
 
-	if err := rootCmd.Execute(); err != nil {
+	// Cancel in-flight DB operations (connect/query) when interrupted instead of
+	// blocking until the process is killed.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		// Skip re-outputting errors that were already formatted as JSON
 		if _, ok := err.(*cli.HandledError); !ok {
 			// humanOutput/jsonOutput may not be set if Cobra failed during

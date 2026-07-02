@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -26,17 +25,17 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			connName := args[0]
 			sql := args[1]
+			ctx := cmd.Context()
 
 			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			conn, err := getConnection(connName)
+			conn, err := getConnection(ctx, connName)
 			if err != nil {
 				return err
 			}
-			ctx := context.Background()
 			defer conn.Close(ctx)
 
 			// Execute query
