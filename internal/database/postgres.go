@@ -2,12 +2,18 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// pgReadOnlyErr is returned by Exec: dbridge connections are read-only, so writes
+// are refused in application code (the session is also read-only at the DB level
+// via default_transaction_read_only=on).
+var pgReadOnlyErr = errors.New("read-only connection: only read queries are permitted")
 
 func init() { RegisterDriver("postgres", &PostgresDriver{}) }
 
@@ -127,21 +133,10 @@ func (c *PgxConnection) Query(ctx context.Context, sql string, args ...interface
 	return qr, nil
 }
 
-// Exec executes a write operation
+// Exec is rejected: dbridge connections are read-only, so write operations are
+// refused in application code.
 func (c *PgxConnection) Exec(ctx context.Context, sql string, args ...interface{}) (*ExecResult, error) {
-	start := time.Now()
-
-	commandTag, err := c.pool.Exec(ctx, sql, args...)
-	if err != nil {
-		return nil, fmt.Errorf("exec failed: %w", err)
-	}
-
-	duration := time.Since(start)
-
-	return &ExecResult{
-		RowsAffected: commandTag.RowsAffected(),
-		Duration:     duration,
-	}, nil
+	return nil, pgReadOnlyErr
 }
 
 // Schema returns schema inspector

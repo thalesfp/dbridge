@@ -190,19 +190,25 @@ func TestReadOnlyConnection_Integration(t *testing.T) {
 		t.Fatalf("Expected 1 row, got %d", result.RowCount)
 	}
 
-	// Write operations should fail with read-only error
+	// Writes attempted via Query must be rejected by the read-only transaction
+	// (default_transaction_read_only=on), proving DB-level enforcement.
 	writeStatements := []string{
 		"CREATE TABLE _dbridge_ro_test (id int)",
 		"DROP TABLE IF EXISTS _dbridge_ro_test",
 	}
 
 	for _, stmt := range writeStatements {
-		_, err := conn.Exec(ctx, stmt)
+		_, err := conn.Query(ctx, stmt)
 		if err == nil {
 			t.Errorf("Expected error for %q on read-only connection, but it succeeded", stmt)
-		} else if !strings.Contains(err.Error(), "read-only") {
+		} else if !strings.Contains(err.Error(), "read-only") && !strings.Contains(err.Error(), "read only") {
 			t.Errorf("Expected read-only error for %q, got: %v", stmt, err)
 		}
+	}
+
+	// Exec is always refused at the application layer.
+	if _, err := conn.Exec(ctx, "CREATE TABLE _dbridge_ro_test (id int)"); err == nil {
+		t.Error("Expected Exec to be rejected on read-only connection")
 	}
 }
 
