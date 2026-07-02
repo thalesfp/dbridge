@@ -591,6 +591,13 @@ func runEditFlow(cfg *config.Config, connName string) error {
 	editSaveFn := func(d *form.ConnectionData) string {
 		nameChanged := d.Name != connName
 		if nameChanged {
+			// Carry the stored credentials over to the new name. Without this a
+			// rename that doesn't also change the password would delete the old
+			// entry and save nothing, leaving the connection with no password.
+			if creds, loadErr := credStore.Load(ctx, connName); loadErr == nil {
+				creds.Username = d.Username
+				_ = credStore.Save(ctx, d.Name, creds)
+			}
 			_ = cfg.RemoveConnection(connName)
 			_ = credStore.Delete(ctx, connName)
 		}
