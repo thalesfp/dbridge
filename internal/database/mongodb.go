@@ -665,6 +665,10 @@ func (s *MongoSchemaInspector) ExplainQuery(ctx context.Context, query string) (
 			filter = bson.M{}
 		}
 
+		if err := validateDocReadOnly(filter, 0); err != nil {
+			return nil, err
+		}
+
 		findCmd := bson.M{
 			"find":   q.Collection,
 			"filter": filter,
