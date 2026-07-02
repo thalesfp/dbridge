@@ -161,7 +161,7 @@ dbridge adapts its output to who is reading it:
 
 `dbridge query` accepts `--format` (`-f`): `compact` (default), `table`, `table-compact`, or `csv`.
 
-The compact format is `{"cols":[...],"types":[...],"rows":[[...]]}` with optional fields: `n` (total rows when truncated), `t` (execution time in ms), and `w` (warnings). Smart simplification collapses simple shapes: one row and one column becomes a bare value, one column becomes an array, one row becomes an object.
+The compact format is `{"cols":[...],"types":[...],"rows":[[...]]}` with optional fields: `t` (execution time in ms) and `w` (warnings). Truncation is signaled by a `w` warning; there is also a reserved `n` field for the true total row count, but drivers cannot know it once results are capped, so it is not currently emitted. Smart simplification collapses simple shapes: one row and one column becomes a bare value, one column becomes an array, one row becomes an object. When a result is truncated, simplification is skipped so the warning is not lost.
 
 SQL results are capped at 10,000 rows; a truncation warning tells the agent to add a `LIMIT`. Query errors are written to stderr as compact JSON (with hint, error code, and position when the server provides them) so they never mix into the data stream.
 
@@ -234,7 +234,7 @@ connections:
 Field notes:
 
 - `driver` defaults to `postgres` when omitted (backward compatibility with older configs).
-- `ssl_mode` uses PostgreSQL-style values (`disable`, `prefer`, `require`, `verify-ca`, `verify-full`) and is mapped to each driver's native TLS settings. The default is `verify-full` for every driver.
+- `ssl_mode` uses PostgreSQL-style values (`disable`, `prefer`, `require`, `verify-ca`, `verify-full`) and is mapped to each driver's native TLS settings. The default is `verify-full` for every driver. `require` encrypts the connection but does not verify the server certificate; `verify-ca` and `verify-full` additionally verify it.
 - `uri` (MongoDB) lets you supply a full connection URI instead of host/port fields.
 - `srv` (MongoDB) switches to `mongodb+srv://` for Atlas-style DNS seed lists.
 - `disabled: true` keeps a connection configured but refuses queries against it. Toggle it from the `dbridge config` TUI.
