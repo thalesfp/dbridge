@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli/output"
@@ -41,9 +42,10 @@ Examples:
 			// Execute query
 			result, err := conn.Query(ctx, sql)
 			if err != nil {
-				// Format error in compact JSON
+				// Format error in compact JSON on stderr so it isn't mixed into
+				// the data stream on stdout.
 				errOutput, _ := output.FormatError(err, nil, nil, nil)
-				fmt.Println(errOutput)
+				fmt.Fprintln(os.Stderr, errOutput)
 				return nil // Don't return error to avoid duplicate error message
 			}
 
