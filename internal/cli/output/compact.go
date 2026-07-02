@@ -51,8 +51,12 @@ func formatCompactResult(result *database.QueryResult, opts FormatOptions) inter
 		return []interface{}{}
 	}
 
+	// Warnings that will be emitted (e.g. truncation) must not be hidden by the
+	// simplified value/array/object forms, which have no field to carry them.
+	hasVisibleWarnings := opts.IncludeWarnings && len(result.Warnings) > 0
+
 	// Smart simplification enabled
-	if opts.SmartSimplify {
+	if opts.SmartSimplify && !hasVisibleWarnings {
 		// Single column, single row → Just the value
 		if len(result.Columns) == 1 && len(result.Rows) == 1 {
 			return result.Rows[0][0]
