@@ -587,6 +587,13 @@ func runEditFlow(cfg *config.Config, connName string) error {
 
 	ctx := context.Background()
 
+	// Prefill the existing password so an in-form connection test (ctrl+t)
+	// authenticates for real instead of with an empty password.
+	existingCreds, err := credStore.Load(ctx, connName)
+	if err != nil && !errors.Is(err, credentials.ErrNotFound) {
+		return fmt.Errorf("failed to load credentials for '%s': %w", connName, err)
+	}
+
 	// Launch form pre-filled with existing data
 	editSaveFn := func(d *form.ConnectionData) string {
 		nameChanged := d.Name != connName
@@ -642,6 +649,7 @@ func runEditFlow(cfg *config.Config, connName string) error {
 		Port:        existingConn.Port,
 		Username:    existingConn.Username,
 		SSLMode:     existingConn.SSLMode,
+		Password:    existingCreds.Password,
 		SRV:         existingConn.SRV,
 		Environment: existingConn.Environment,
 		Description: existingConn.Description,
