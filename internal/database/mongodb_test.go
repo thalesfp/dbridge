@@ -84,6 +84,18 @@ func TestBuildMongoURI(t *testing.T) {
 			},
 			expected: "mongodb://admin:p%40ss%3Aword%2F123@localhost:27017/mydb?tls=false",
 		},
+		{
+			name: "special characters in username",
+			config: ConnectionConfig{
+				Host:     "localhost",
+				Port:     27017,
+				Database: "mydb",
+				Username: "user@corp",
+				Password: "pass",
+				SSLMode:  "disable",
+			},
+			expected: "mongodb://user%40corp:pass@localhost:27017/mydb?tls=false",
+		},
 	}
 
 	for _, tt := range tests {

@@ -51,13 +51,20 @@ type MongoConnection struct {
 }
 
 func buildMongoURI(config *ConnectionConfig) string {
-	var userInfo string
+	scheme := "mongodb"
+	host := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	if config.SRV {
+		scheme = "mongodb+srv"
+		host = config.Host
+	}
+
+	var user *url.Userinfo
 	if config.Username != "" {
-		userInfo = url.QueryEscape(config.Username)
 		if config.Password != "" {
-			userInfo += ":" + url.QueryEscape(config.Password)
+			user = url.UserPassword(config.Username, config.Password)
+		} else {
+			user = url.User(config.Username)
 		}
-		userInfo += "@"
 	}
 
 	sslMode := strings.ToLower(config.SSLMode)
@@ -71,18 +78,14 @@ func buildMongoURI(config *ConnectionConfig) string {
 		params.Set("tlsInsecure", "true")
 	}
 
-	query := ""
-	if len(params) > 0 {
-		query = "?" + params.Encode()
+	u := url.URL{
+		Scheme:   scheme,
+		User:     user,
+		Host:     host,
+		Path:     "/" + config.Database,
+		RawQuery: params.Encode(),
 	}
-
-	if config.SRV {
-		return fmt.Sprintf("mongodb+srv://%s%s/%s%s",
-			userInfo, config.Host, config.Database, query)
-	}
-
-	return fmt.Sprintf("mongodb://%s%s:%d/%s%s",
-		userInfo, config.Host, config.Port, config.Database, query)
+	return u.String()
 }
 
 func mapSSLToMongoTLS(sslMode string) string {
