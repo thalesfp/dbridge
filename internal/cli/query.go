@@ -43,10 +43,12 @@ Examples:
 			result, err := conn.Query(ctx, sql)
 			if err != nil {
 				// Format error in compact JSON on stderr so it isn't mixed into
-				// the data stream on stdout.
+				// the data stream on stdout. Return a HandledError (already
+				// printed) so the process exits non-zero without main re-printing
+				// it; otherwise a stdout-only caller sees an empty success.
 				errOutput, _ := output.FormatError(err, nil, nil, nil)
 				fmt.Fprintln(os.Stderr, errOutput)
-				return nil // Don't return error to avoid duplicate error message
+				return &HandledError{Message: err.Error()}
 			}
 
 			// Determine output format

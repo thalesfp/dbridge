@@ -101,10 +101,23 @@ func main() {
 	rootCmd.AddCommand(cli.NewSchemaCmd())
 	rootCmd.AddCommand(cli.NewMCPCmd())
 
-	// Cancel in-flight DB operations (connect/query) when interrupted instead of
-	// blocking until the process is killed.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	// Interrupt handling. The first SIGINT/SIGTERM cancels in-flight DB operations
+	// (connect/query) for a graceful stop; a second one force-exits, so an
+	// operation that ignores cancellation can always be killed with a second
+	// Ctrl+C. A buffered channel captures both signals with no scheduling race,
+	// and os.Exit fires regardless of other subscribers (such as the handler
+	// mcp-go's ServeStdio installs).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+		<-sigCh
+		os.Exit(130)
+	}()
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		// Skip re-outputting errors that were already formatted as JSON
