@@ -94,7 +94,7 @@ type storedCredential struct {
 // encodeCredentials serializes credentials as JSON. Marshaling a fixed struct of
 // strings cannot fail, so the error is intentionally ignored.
 func encodeCredentials(creds Credentials) []byte {
-	data, _ := json.Marshal(storedCredential{Username: creds.Username, Password: creds.Password})
+	data, _ := json.Marshal(storedCredential(creds))
 	return data
 }
 
@@ -107,7 +107,7 @@ func decodeCredentials(data []byte) Credentials {
 	if len(s) > 0 && s[0] == '{' {
 		var sc storedCredential
 		if err := json.Unmarshal(data, &sc); err == nil {
-			return Credentials{Username: sc.Username, Password: sc.Password}
+			return Credentials(sc)
 		}
 	}
 
