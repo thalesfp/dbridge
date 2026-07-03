@@ -208,6 +208,9 @@ func validateDocReadOnly(doc bson.M, depth int) error {
 }
 
 func validateValueReadOnly(val interface{}, depth int) error {
+	if depth > maxBSONDepth {
+		return fmt.Errorf("document exceeds maximum nesting depth")
+	}
 	switch v := val.(type) {
 	case bson.M:
 		return validateDocReadOnly(v, depth)
@@ -229,13 +232,13 @@ func validateValueReadOnly(val interface{}, depth int) error {
 		}
 	case bson.A:
 		for _, elem := range v {
-			if err := validateValueReadOnly(elem, depth); err != nil {
+			if err := validateValueReadOnly(elem, depth+1); err != nil {
 				return err
 			}
 		}
 	case []interface{}:
 		for _, elem := range v {
-			if err := validateValueReadOnly(elem, depth); err != nil {
+			if err := validateValueReadOnly(elem, depth+1); err != nil {
 				return err
 			}
 		}

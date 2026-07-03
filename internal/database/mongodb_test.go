@@ -333,6 +333,35 @@ func TestValidateReadOnly_NestedJSFromJSON(t *testing.T) {
 	}
 }
 
+// TestValidateReadOnly_DeeplyNestedArrays checks that the depth cap counts
+// array nesting. Arrays previously recursed without incrementing depth, so an
+// all-array nest never reached validateDocReadOnly's cap check and could force
+// unbounded recursion before MongoDB ever saw the query.
+func TestValidateReadOnly_DeeplyNestedArrays(t *testing.T) {
+	nested := "1"
+	for i := 0; i < maxBSONDepth+5; i++ {
+		nested = "[" + nested + "]"
+	}
+	deepQuery := `{"collection":"c","filter":{"x":` + nested + `}}`
+
+	q, err := parseMongoQuery(deepQuery)
+	if err != nil {
+		t.Fatalf("parseMongoQuery failed: %v", err)
+	}
+	if err := validateDocReadOnly(q.Filter, 0); err == nil {
+		t.Error("expected deeply nested arrays to be rejected by the depth cap, got nil")
+	}
+
+	shallowQuery := `{"collection":"c","filter":{"x":[[["ok"]]]}}`
+	sq, err := parseMongoQuery(shallowQuery)
+	if err != nil {
+		t.Fatalf("parseMongoQuery failed: %v", err)
+	}
+	if err := validateDocReadOnly(sq.Filter, 0); err != nil {
+		t.Errorf("unexpected rejection of shallow array query: %v", err)
+	}
+}
+
 func TestMongoDriverRegistered(t *testing.T) {
 	names := DriverNames()
 	found := false
