@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // TestGetTypeName tests PostgreSQL type OID to name conversion
@@ -95,6 +97,67 @@ func TestBuildPgConnString_AlwaysReadOnly(t *testing.T) {
 	}
 }
 
+// TestBuildPgConnString_EscapesMetacharacters verifies that credentials and
+// fields containing URL metacharacters are escaped, so they round-trip through
+// the parser instead of breaking the DSN or injecting parameters (e.g. a
+// database name that smuggles in sslmode=disable / read_only=off).
+func TestBuildPgConnString_EscapesMetacharacters(t *testing.T) {
+	cfg := ConnectionConfig{
+		Host:     "localhost",
+		Port:     5432,
+		Database: "mydb?sslmode=disable&default_transaction_read_only=off",
+		Username: "ad min",
+		Password: "p@ss:w/ord?&x=1",
+		SSLMode:  "verify-full",
+	}
+
+	pc, err := pgxpool.ParseConfig(buildPgConnString(&cfg))
+	if err != nil {
+		t.Fatalf("connection string must parse, got error: %v", err)
+	}
+	if pc.ConnConfig.User != cfg.Username {
+		t.Errorf("username = %q, want %q", pc.ConnConfig.User, cfg.Username)
+	}
+	if pc.ConnConfig.Password != cfg.Password {
+		t.Errorf("password = %q, want %q", pc.ConnConfig.Password, cfg.Password)
+	}
+	if pc.ConnConfig.Database != cfg.Database {
+		t.Errorf("database = %q, want %q", pc.ConnConfig.Database, cfg.Database)
+	}
+	if got := pc.ConnConfig.RuntimeParams["default_transaction_read_only"]; got != "on" {
+		t.Errorf("default_transaction_read_only = %q, want \"on\" (injection must not override it)", got)
+	}
+	if pc.ConnConfig.TLSConfig == nil {
+		t.Error("TLS must remain enabled for verify-full; injection must not disable it")
+	}
+}
+
+// TestBuildPgConnString_PasswordlessDoesNotInheritPGPASSWORD verifies that a
+// connection configured without a password sends an explicit empty password
+// rather than falling back to the ambient PGPASSWORD. pgx only treats the URL
+// password as supplied when the userinfo carries a password component, so the
+// builder must always emit one (user:@host), never bare userinfo (user@host).
+func TestBuildPgConnString_PasswordlessDoesNotInheritPGPASSWORD(t *testing.T) {
+	t.Setenv("PGPASSWORD", "ambient-secret")
+
+	cfg := ConnectionConfig{
+		Host:     "localhost",
+		Port:     5432,
+		Database: "mydb",
+		Username: "app",
+		Password: "",
+		SSLMode:  "disable",
+	}
+
+	pc, err := pgxpool.ParseConfig(buildPgConnString(&cfg))
+	if err != nil {
+		t.Fatalf("connection string must parse, got error: %v", err)
+	}
+	if pc.ConnConfig.Password != "" {
+		t.Errorf("passwordless connection resolved password = %q, want \"\" (must not inherit PGPASSWORD)", pc.ConnConfig.Password)
+	}
+}
+
 // pgTestConfig parses TEST_DATABASE_URL into a ConnectionConfig.
 func pgTestConfig(t *testing.T) *ConnectionConfig {
 	t.Helper()
@@ -153,19 +216,25 @@ func TestReadOnlyConnection_Integration(t *testing.T) {
 		t.Fatalf("Expected 1 row, got %d", result.RowCount)
 	}
 
-	// Write operations should fail with read-only error
+	// Writes attempted via Query must be rejected by the read-only transaction
+	// (default_transaction_read_only=on), proving DB-level enforcement.
 	writeStatements := []string{
 		"CREATE TABLE _dbridge_ro_test (id int)",
 		"DROP TABLE IF EXISTS _dbridge_ro_test",
 	}
 
 	for _, stmt := range writeStatements {
-		_, err := conn.Exec(ctx, stmt)
+		_, err := conn.Query(ctx, stmt)
 		if err == nil {
 			t.Errorf("Expected error for %q on read-only connection, but it succeeded", stmt)
-		} else if !strings.Contains(err.Error(), "read-only") {
+		} else if !strings.Contains(err.Error(), "read-only") && !strings.Contains(err.Error(), "read only") {
 			t.Errorf("Expected read-only error for %q, got: %v", stmt, err)
 		}
+	}
+
+	// Exec is always refused at the application layer.
+	if _, err := conn.Exec(ctx, "CREATE TABLE _dbridge_ro_test (id int)"); err == nil {
+		t.Error("Expected Exec to be rejected on read-only connection")
 	}
 }
 

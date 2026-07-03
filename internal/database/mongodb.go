@@ -51,13 +51,20 @@ type MongoConnection struct {
 }
 
 func buildMongoURI(config *ConnectionConfig) string {
-	var userInfo string
+	scheme := "mongodb"
+	host := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	if config.SRV {
+		scheme = "mongodb+srv"
+		host = config.Host
+	}
+
+	var user *url.Userinfo
 	if config.Username != "" {
-		userInfo = url.QueryEscape(config.Username)
 		if config.Password != "" {
-			userInfo += ":" + url.QueryEscape(config.Password)
+			user = url.UserPassword(config.Username, config.Password)
+		} else {
+			user = url.User(config.Username)
 		}
-		userInfo += "@"
 	}
 
 	sslMode := strings.ToLower(config.SSLMode)
@@ -71,18 +78,14 @@ func buildMongoURI(config *ConnectionConfig) string {
 		params.Set("tlsInsecure", "true")
 	}
 
-	query := ""
-	if len(params) > 0 {
-		query = "?" + params.Encode()
+	u := url.URL{
+		Scheme:   scheme,
+		User:     user,
+		Host:     host,
+		Path:     "/" + config.Database,
+		RawQuery: params.Encode(),
 	}
-
-	if config.SRV {
-		return fmt.Sprintf("mongodb+srv://%s%s/%s%s",
-			userInfo, config.Host, config.Database, query)
-	}
-
-	return fmt.Sprintf("mongodb://%s%s:%d/%s%s",
-		userInfo, config.Host, config.Port, config.Database, query)
+	return u.String()
 }
 
 func mapSSLToMongoTLS(sslMode string) string {
@@ -205,9 +208,19 @@ func validateDocReadOnly(doc bson.M, depth int) error {
 }
 
 func validateValueReadOnly(val interface{}, depth int) error {
+	if depth > maxBSONDepth {
+		return fmt.Errorf("document exceeds maximum nesting depth")
+	}
 	switch v := val.(type) {
 	case bson.M:
 		return validateDocReadOnly(v, depth)
+	// The query JSON is decoded with encoding/json, which produces the concrete
+	// types map[string]interface{} and []interface{} for nested objects/arrays,
+	// NOT bson.M/bson.A (bson.M is a defined type, not an alias). Without these
+	// cases a JS operator nested even one level deep (e.g. {"$and":[{"$where":...}]})
+	// would slip past the read-only guard.
+	case map[string]interface{}:
+		return validateDocReadOnly(bson.M(v), depth)
 	case bson.D:
 		for _, elem := range v {
 			if jsOperators[elem.Key] {
@@ -219,7 +232,13 @@ func validateValueReadOnly(val interface{}, depth int) error {
 		}
 	case bson.A:
 		for _, elem := range v {
-			if err := validateValueReadOnly(elem, depth); err != nil {
+			if err := validateValueReadOnly(elem, depth+1); err != nil {
+				return err
+			}
+		}
+	case []interface{}:
+		for _, elem := range v {
+			if err := validateValueReadOnly(elem, depth+1); err != nil {
 				return err
 			}
 		}
@@ -663,6 +682,10 @@ func (s *MongoSchemaInspector) ExplainQuery(ctx context.Context, query string) (
 		filter := q.Filter
 		if filter == nil {
 			filter = bson.M{}
+		}
+
+		if err := validateDocReadOnly(filter, 0); err != nil {
+			return nil, err
 		}
 
 		findCmd := bson.M{

@@ -40,14 +40,15 @@ Examples:
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			connName := args[0]
+			ctx := cmd.Context()
 
-			conn, err := getConnection(connName)
+			conn, err := getConnection(ctx, connName)
 			if err != nil {
 				return err
 			}
-			defer conn.Close(context.Background())
+			defer conn.Close(ctx)
 
-			schemas, err := conn.Schema().ListSchemas(context.Background())
+			schemas, err := conn.Schema().ListSchemas(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list schemas: %w", err)
 			}
@@ -83,14 +84,15 @@ Examples:
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			connName := args[0]
+			ctx := cmd.Context()
 
-			conn, err := getConnection(connName)
+			conn, err := getConnection(ctx, connName)
 			if err != nil {
 				return err
 			}
-			defer conn.Close(context.Background())
+			defer conn.Close(ctx)
 
-			tables, err := conn.Schema().ListTables(context.Background(), schema)
+			tables, err := conn.Schema().ListTables(ctx, schema)
 			if err != nil {
 				return fmt.Errorf("failed to list tables: %w", err)
 			}
@@ -128,14 +130,15 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			connName := args[0]
 			tableName := args[1]
+			ctx := cmd.Context()
 
-			conn, err := getConnection(connName)
+			conn, err := getConnection(ctx, connName)
 			if err != nil {
 				return err
 			}
-			defer conn.Close(context.Background())
+			defer conn.Close(ctx)
 
-			def, err := conn.Schema().DescribeTable(context.Background(), schema, tableName)
+			def, err := conn.Schema().DescribeTable(ctx, schema, tableName)
 			if err != nil {
 				return fmt.Errorf("failed to describe table: %w", err)
 			}
@@ -152,7 +155,7 @@ Examples:
 	return cmd
 }
 
-func getConnection(connName string) (database.Connection, error) {
+func getConnection(ctx context.Context, connName string) (database.Connection, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -172,23 +175,19 @@ func getConnection(connName string) (database.Connection, error) {
 		return nil, fmt.Errorf("failed to open credential store: %w", err)
 	}
 
-	ctx := context.Background()
 	creds, err := credStore.Load(ctx, connName)
-	if err != nil {
-		if !errors.Is(err, credentials.ErrNotFound) {
-			return nil, fmt.Errorf("failed to load credentials for '%s': %w", connName, err)
-		}
-		creds = credentials.Credentials{
-			Username: connCfg.Username,
-		}
+	if err != nil && !errors.Is(err, credentials.ErrNotFound) {
+		return nil, fmt.Errorf("failed to load credentials for '%s': %w", connName, err)
 	}
 
+	// The config file is the source of truth for the username; the keychain only
+	// supplies the secret. Otherwise a stored username would shadow an edited one.
 	connConfig := &database.ConnectionConfig{
 		Driver:   connCfg.Driver,
 		Host:     connCfg.Host,
 		Port:     connCfg.Port,
 		Database: connCfg.Database,
-		Username: creds.Username,
+		Username: connCfg.Username,
 		Password: creds.Password,
 		SSLMode:  connCfg.SSLMode,
 		URI:      connCfg.URI,

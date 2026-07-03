@@ -571,6 +571,145 @@ Examples:
 	}
 }
 
+// establishRenamedCredential stores the edited connection's credential under its
+// new name without touching the old key, so a later config-save failure cannot
+// lose the secret. Used only when the connection is being renamed.
+func establishRenamedCredential(ctx context.Context, store credentials.Store, oldName string, d *form.ConnectionData) error {
+	switch {
+	case d.PasswordChanged && d.Password == "":
+		if err := store.Delete(ctx, d.Name); err != nil && !errors.Is(err, credentials.ErrNotFound) {
+			return fmt.Errorf("failed to clear credentials: %w", err)
+		}
+	case d.PasswordChanged:
+		if err := store.Save(ctx, d.Name, credentials.Credentials{Username: d.Username, Password: d.Password}); err != nil {
+			return fmt.Errorf("failed to save credentials: %w", err)
+		}
+	default:
+		existing, err := store.Load(ctx, oldName)
+		if err != nil && !errors.Is(err, credentials.ErrNotFound) {
+			return fmt.Errorf("failed to read existing credentials: %w", err)
+		}
+		if errors.Is(err, credentials.ErrNotFound) {
+			// The source is passwordless, so the new name must be too. Clear any
+			// stale secret already sitting under the new name (an orphan from an
+			// earlier failed edit) so the renamed connection cannot silently
+			// authenticate with an unrelated credential.
+			if delErr := store.Delete(ctx, d.Name); delErr != nil && !errors.Is(delErr, credentials.ErrNotFound) {
+				return fmt.Errorf("failed to clear stale credentials: %w", delErr)
+			}
+			return nil
+		}
+		existing.Username = d.Username
+		if err := store.Save(ctx, d.Name, existing); err != nil {
+			return fmt.Errorf("failed to migrate credentials: %w", err)
+		}
+	}
+	return nil
+}
+
+// applySameNamePassword applies an explicit password set/clear to a connection
+// whose name did not change.
+func applySameNamePassword(ctx context.Context, store credentials.Store, d *form.ConnectionData) error {
+	if d.Password == "" {
+		if err := store.Delete(ctx, d.Name); err != nil && !errors.Is(err, credentials.ErrNotFound) {
+			return fmt.Errorf("failed to clear credentials: %w", err)
+		}
+		return nil
+	}
+	if err := store.Save(ctx, d.Name, credentials.Credentials{Username: d.Username, Password: d.Password}); err != nil {
+		return fmt.Errorf("failed to save credentials: %w", err)
+	}
+	return nil
+}
+
+// applyConnectionEdit reconciles the keychain and config for an edited connection
+// so that no single step's failure can lose the stored secret:
+//  1. On rename, establish the credential under the new name (old key untouched).
+//  2. Persist config via saveConfig.
+//  3. Only after the config is durable, remove the old key (rename) or apply a
+//     same-name password change; a rejected config edit leaves the secret intact.
+//
+// A rename onto a name already used by another connection is rejected up front
+// (nameTaken), so it cannot clobber that connection's config and credential.
+//
+// If saveConfig fails during a rename, nothing was persisted, so the credential
+// staged under the new name is removed again to leave both stores as they were.
+func applyConnectionEdit(ctx context.Context, store credentials.Store, oldName string, d *form.ConnectionData, nameTaken func(string) bool, saveConfig func() error) error {
+	nameChanged := d.Name != oldName
+
+	if nameChanged && nameTaken(d.Name) {
+		return fmt.Errorf("a connection named %q already exists", d.Name)
+	}
+
+	if nameChanged {
+		if err := establishRenamedCredential(ctx, store, oldName, d); err != nil {
+			return err
+		}
+	}
+
+	if err := saveConfig(); err != nil {
+		saveErr := fmt.Errorf("failed to save config: %w", err)
+		if nameChanged {
+			if delErr := store.Delete(ctx, d.Name); delErr != nil && !errors.Is(delErr, credentials.ErrNotFound) {
+				return errors.Join(saveErr, fmt.Errorf("failed to clean up staged credentials: %w", delErr))
+			}
+		}
+		return saveErr
+	}
+
+	if nameChanged {
+		if err := store.Delete(ctx, oldName); err != nil && !errors.Is(err, credentials.ErrNotFound) {
+			return fmt.Errorf("connection saved, but failed to remove old credentials: %w", err)
+		}
+	} else if d.PasswordChanged {
+		if err := applySameNamePassword(ctx, store, d); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// persistConnectionEdit applies the edited connection to cfg and persists it via
+// save. On a rename the old entry is removed first. If save fails, nothing was
+// written to disk, so the in-memory config is rolled back to its prior state:
+// otherwise the half-applied map would block a retry (the collision guard would
+// see the failed destination name) or write a phantom connection on the next save.
+func persistConnectionEdit(cfg *config.Config, oldName string, updatedConn, existingConn *config.Connection, save func() error) error {
+	nameChanged := updatedConn.Name != oldName
+
+	if nameChanged {
+		// oldName was loaded via GetConnection at flow entry, so it is present.
+		_ = cfg.RemoveConnection(oldName)
+	}
+	cfg.AddConnection(updatedConn)
+
+	if err := save(); err != nil {
+		// updatedConn.Name was just added, so it is present.
+		_ = cfg.RemoveConnection(updatedConn.Name)
+		cfg.AddConnection(existingConn)
+		return err
+	}
+
+	return nil
+}
+
+// prefillCredentials reads a connection's stored credential for use as an edit
+// form prefill. It is best-effort: a missing secret (ErrNotFound) yields an
+// empty credential with no error, and any other load failure yields an empty
+// credential plus the error, so the caller can warn and still open the form
+// rather than blocking edits that do not need the secret.
+func prefillCredentials(ctx context.Context, store credentials.Store, name string) (credentials.Credentials, error) {
+	creds, err := store.Load(ctx, name)
+	if err != nil {
+		if errors.Is(err, credentials.ErrNotFound) {
+			return credentials.Credentials{}, nil
+		}
+		return credentials.Credentials{}, err
+	}
+	return creds, nil
+}
+
 // runEditFlow runs the interactive edit flow for a connection
 func runEditFlow(cfg *config.Config, connName string) error {
 	// Get existing connection
@@ -587,42 +726,43 @@ func runEditFlow(cfg *config.Config, connName string) error {
 
 	ctx := context.Background()
 
+	// Prefill the existing password so an in-form connection test (ctrl+t)
+	// authenticates for real. Prefill is best-effort: a degraded keychain,
+	// access denial, or transient backend error must not block editing metadata
+	// or clearing/replacing a bad password, so on a hard load error the form
+	// still opens with an empty password (which keeps PasswordChanged false, so
+	// a metadata-only save never overwrites the stored secret).
+	existingCreds, loadErr := prefillCredentials(ctx, credStore, connName)
+	if loadErr != nil {
+		fmt.Printf("Warning: could not read the stored password for '%s' (%v); continuing without it.\n", connName, loadErr)
+	}
+
 	// Launch form pre-filled with existing data
 	editSaveFn := func(d *form.ConnectionData) string {
-		nameChanged := d.Name != connName
-		if nameChanged {
-			_ = cfg.RemoveConnection(connName)
-			_ = credStore.Delete(ctx, connName)
+		nameTaken := func(name string) bool {
+			_, exists := cfg.Connections[name]
+			return exists
 		}
 
-		updatedConn := &config.Connection{
-			Driver:      d.Driver,
-			Name:        d.Name,
-			Host:        d.Host,
-			Port:        d.Port,
-			Database:    d.Database,
-			Username:    d.Username,
-			SSLMode:     d.SSLMode,
-			Disabled:    existingConn.Disabled,
-			SRV:         d.SRV,
-			Environment: d.Environment,
-			Description: d.Description,
-		}
-
-		if d.PasswordChanged {
-			if d.Password == "" {
-				_ = credStore.Delete(ctx, d.Name)
-			} else if err := credStore.Save(ctx, d.Name, credentials.Credentials{
-				Username: d.Username,
-				Password: d.Password,
-			}); err != nil {
-				return "failed to save credentials: " + err.Error()
+		saveConfig := func() error {
+			updatedConn := &config.Connection{
+				Driver:      d.Driver,
+				Name:        d.Name,
+				Host:        d.Host,
+				Port:        d.Port,
+				Database:    d.Database,
+				Username:    d.Username,
+				SSLMode:     d.SSLMode,
+				Disabled:    existingConn.Disabled,
+				SRV:         d.SRV,
+				Environment: d.Environment,
+				Description: d.Description,
 			}
+			return persistConnectionEdit(cfg, connName, updatedConn, existingConn, cfg.Save)
 		}
 
-		cfg.AddConnection(updatedConn)
-		if err := cfg.Save(); err != nil {
-			return "failed to save config: " + err.Error()
+		if err := applyConnectionEdit(ctx, credStore, connName, d, nameTaken, saveConfig); err != nil {
+			return err.Error()
 		}
 		return ""
 	}
@@ -635,6 +775,7 @@ func runEditFlow(cfg *config.Config, connName string) error {
 		Port:        existingConn.Port,
 		Username:    existingConn.Username,
 		SSLMode:     existingConn.SSLMode,
+		Password:    existingCreds.Password,
 		SRV:         existingConn.SRV,
 		Environment: existingConn.Environment,
 		Description: existingConn.Description,

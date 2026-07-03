@@ -398,6 +398,41 @@ func TestFormatCompact_Truncated(t *testing.T) {
 	}
 }
 
+// TestFormatCompact_SmartSimplifyKeepsWarnings verifies that a truncated
+// single-column result still surfaces its warning when SmartSimplify is on.
+// Without the guard, the "array of values" shortcut would drop the warning and
+// silently hide truncation from the consumer.
+func TestFormatCompact_SmartSimplifyKeepsWarnings(t *testing.T) {
+	rows := make([][]interface{}, 3)
+	for i := range rows {
+		rows[i] = []interface{}{i}
+	}
+	result := &database.QueryResult{
+		Columns:     []string{"id"},
+		ColumnTypes: []string{"int4"},
+		Rows:        rows,
+		RowCount:    len(rows),
+		Truncated:   true,
+		Warnings:    []string{"Results limited to 10000 rows."},
+	}
+
+	output, err := FormatCompact(result, FormatOptions{
+		SmartSimplify:   true,
+		IncludeWarnings: true,
+	})
+	if err != nil {
+		t.Fatalf("FormatCompact failed: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &m); err != nil {
+		t.Fatalf("expected object output carrying warnings, got: %s (%v)", output, err)
+	}
+	if _, hasW := m["w"]; !hasW {
+		t.Errorf("truncation warning must survive SmartSimplify; got: %s", output)
+	}
+}
+
 // TestTokenSavings tests that compact format actually saves tokens
 func TestTokenSavings(t *testing.T) {
 	result := &database.QueryResult{

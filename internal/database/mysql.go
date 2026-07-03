@@ -3,12 +3,18 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
+
+// mysqlReadOnlyErr is returned by Exec: dbridge connections are read-only, so
+// writes are refused in application code (the session is also read-only at the
+// DB level via SET SESSION TRANSACTION READ ONLY).
+var mysqlReadOnlyErr = errors.New("read-only connection: only read queries are permitted")
 
 func init() { RegisterDriver("mysql", &MysqlDriver{}) }
 
@@ -239,22 +245,10 @@ func (c *MysqlConnection) Query(ctx context.Context, sqlStr string, args ...inte
 	return qr, nil
 }
 
-// Exec executes a write operation
+// Exec is rejected: dbridge connections are read-only, so write operations are
+// refused in application code.
 func (c *MysqlConnection) Exec(ctx context.Context, sqlStr string, args ...interface{}) (*ExecResult, error) {
-	start := time.Now()
-
-	res, err := c.conn.ExecContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, fmt.Errorf("exec failed: %w", err)
-	}
-
-	affected, _ := res.RowsAffected()
-	duration := time.Since(start)
-
-	return &ExecResult{
-		RowsAffected: affected,
-		Duration:     duration,
-	}, nil
+	return nil, mysqlReadOnlyErr
 }
 
 // Schema returns schema inspector

@@ -2,11 +2,18 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// pgReadOnlyErr is returned by Exec: dbridge connections are read-only, so writes
+// are refused in application code (the session is also read-only at the DB level
+// via default_transaction_read_only=on).
+var pgReadOnlyErr = errors.New("read-only connection: only read queries are permitted")
 
 func init() { RegisterDriver("postgres", &PostgresDriver{}) }
 
@@ -44,20 +51,29 @@ type PgxConnection struct {
 }
 
 // buildPgConnString builds a PostgreSQL connection string from the config.
+// Uses net/url so that credentials, host and database containing URL
+// metacharacters are escaped rather than breaking or injecting DSN parameters
+// (e.g. an unescaped "?sslmode=disable" could silently downgrade TLS).
 func buildPgConnString(config *ConnectionConfig) string {
-	connString := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		config.Username,
-		config.Password,
-		config.Host,
-		config.Port,
-		config.Database,
-		config.SSLMode,
-	)
+	query := url.Values{}
+	if config.SSLMode != "" {
+		query.Set("sslmode", config.SSLMode)
+	}
+	query.Set("default_transaction_read_only", "on")
 
-	connString += "&default_transaction_read_only=on"
-
-	return connString
+	// Always emit an explicit password component (url.UserPassword keeps the
+	// colon even when the password is empty), so a passwordless connection sends
+	// an explicit empty password instead of falling back to PGPASSWORD from the
+	// environment. The keychain/config is the sole source of truth for
+	// credentials; ambient env secrets must never leak into a connection.
+	u := &url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(config.Username, config.Password),
+		Host:     fmt.Sprintf("%s:%d", config.Host, config.Port),
+		Path:     "/" + config.Database,
+		RawQuery: query.Encode(),
+	}
+	return u.String()
 }
 
 // Query executes a SELECT query
@@ -115,21 +131,10 @@ func (c *PgxConnection) Query(ctx context.Context, sql string, args ...interface
 	return qr, nil
 }
 
-// Exec executes a write operation
+// Exec is rejected: dbridge connections are read-only, so write operations are
+// refused in application code.
 func (c *PgxConnection) Exec(ctx context.Context, sql string, args ...interface{}) (*ExecResult, error) {
-	start := time.Now()
-
-	commandTag, err := c.pool.Exec(ctx, sql, args...)
-	if err != nil {
-		return nil, fmt.Errorf("exec failed: %w", err)
-	}
-
-	duration := time.Since(start)
-
-	return &ExecResult{
-		RowsAffected: commandTag.RowsAffected(),
-		Duration:     duration,
-	}, nil
+	return nil, pgReadOnlyErr
 }
 
 // Schema returns schema inspector

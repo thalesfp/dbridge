@@ -84,6 +84,18 @@ func TestBuildMongoURI(t *testing.T) {
 			},
 			expected: "mongodb://admin:p%40ss%3Aword%2F123@localhost:27017/mydb?tls=false",
 		},
+		{
+			name: "special characters in username",
+			config: ConnectionConfig{
+				Host:     "localhost",
+				Port:     27017,
+				Database: "mydb",
+				Username: "user@corp",
+				Password: "pass",
+				SSLMode:  "disable",
+			},
+			expected: "mongodb://user%40corp:pass@localhost:27017/mydb?tls=false",
+		},
 	}
 
 	for _, tt := range tests {
@@ -272,6 +284,81 @@ func TestValidatePipelineReadOnly_DangerousNestedOperators(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+// TestValidateReadOnly_NestedJSFromJSON exercises the real decode path:
+// parseMongoQuery uses encoding/json, which yields map[string]interface{} and
+// []interface{} for nested objects/arrays (not bson.M/bson.A). A JS operator
+// nested even one level deep must still be rejected. The bson.M-literal tests
+// above cannot catch this gap because their nested values are already bson.M.
+func TestValidateReadOnly_NestedJSFromJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+	}{
+		{"top-level $where", `{"collection":"c","filter":{"$where":"1"}}`, true},
+		{"$where nested in $and", `{"collection":"c","filter":{"$and":[{"$where":"1"}]}}`, true},
+		{"$where nested in subdocument", `{"collection":"c","filter":{"a":{"$where":"1"}}}`, true},
+		{"$function nested in $or", `{"collection":"c","filter":{"$or":[{"$function":{"body":"x"}}]}}`, true},
+		{"$accumulator nested in array", `{"collection":"c","filter":{"x":[{"$accumulator":{"init":"f"}}]}}`, true},
+		{"aggregate $match $where", `{"collection":"c","aggregate":[{"$match":{"$where":"1"}}]}`, true},
+		{"aggregate nested $function", `{"collection":"c","aggregate":[{"$addFields":{"y":{"$function":{"body":"x"}}}}]}`, true},
+		{"benign nested $and", `{"collection":"c","filter":{"$and":[{"age":{"$gt":21}}]}}`, false},
+		{"benign subdocument", `{"collection":"c","filter":{"user":{"name":"alice"}}}`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := parseMongoQuery(tt.query)
+			if err != nil {
+				t.Fatalf("parseMongoQuery failed: %v", err)
+			}
+
+			var validationErr error
+			if len(q.Aggregate) > 0 {
+				validationErr = validatePipelineReadOnly(q.Aggregate)
+			} else {
+				validationErr = validateDocReadOnly(q.Filter, 0)
+			}
+
+			if tt.wantErr && validationErr == nil {
+				t.Errorf("expected nested JS operator to be rejected, got nil")
+			}
+			if !tt.wantErr && validationErr != nil {
+				t.Errorf("unexpected rejection of benign query: %v", validationErr)
+			}
+		})
+	}
+}
+
+// TestValidateReadOnly_DeeplyNestedArrays checks that the depth cap counts
+// array nesting. Arrays previously recursed without incrementing depth, so an
+// all-array nest never reached validateDocReadOnly's cap check and could force
+// unbounded recursion before MongoDB ever saw the query.
+func TestValidateReadOnly_DeeplyNestedArrays(t *testing.T) {
+	nested := "1"
+	for i := 0; i < maxBSONDepth+5; i++ {
+		nested = "[" + nested + "]"
+	}
+	deepQuery := `{"collection":"c","filter":{"x":` + nested + `}}`
+
+	q, err := parseMongoQuery(deepQuery)
+	if err != nil {
+		t.Fatalf("parseMongoQuery failed: %v", err)
+	}
+	if err := validateDocReadOnly(q.Filter, 0); err == nil {
+		t.Error("expected deeply nested arrays to be rejected by the depth cap, got nil")
+	}
+
+	shallowQuery := `{"collection":"c","filter":{"x":[[["ok"]]]}}`
+	sq, err := parseMongoQuery(shallowQuery)
+	if err != nil {
+		t.Fatalf("parseMongoQuery failed: %v", err)
+	}
+	if err := validateDocReadOnly(sq.Filter, 0); err != nil {
+		t.Errorf("unexpected rejection of shallow array query: %v", err)
 	}
 }
 

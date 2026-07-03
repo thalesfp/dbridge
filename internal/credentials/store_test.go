@@ -55,6 +55,70 @@ func (m *MockStore) Type() string {
 	return "mock"
 }
 
+// TestEncodeDecodeCredentials_RoundTrip verifies JSON serialization round-trips,
+// including values that broke the legacy colon format (colons in the username).
+func TestEncodeDecodeCredentials_RoundTrip(t *testing.T) {
+	cases := []Credentials{
+		{Username: "user", Password: "pass"},
+		{Username: "user:with:colons", Password: "p@ss:w/ord?"},
+		{Username: "", Password: "only-password"},
+		{Username: "user", Password: ""},
+	}
+	for _, want := range cases {
+		got := decodeCredentials(encodeCredentials(want))
+		if got != want {
+			t.Errorf("round-trip = %+v, want %+v", got, want)
+		}
+	}
+}
+
+// TestDecodeCredentials_LegacyFormats verifies old keychain entries still load.
+func TestDecodeCredentials_LegacyFormats(t *testing.T) {
+	if got := decodeCredentials([]byte("admin:secret")); got.Username != "admin" || got.Password != "secret" {
+		t.Errorf("legacy colon form = %+v, want {admin secret}", got)
+	}
+	if got := decodeCredentials([]byte("barepassword")); got.Username != "" || got.Password != "barepassword" {
+		t.Errorf("legacy bare password = %+v, want {\"\" barepassword}", got)
+	}
+}
+
+// TestDecodeCredentials_LegacyPasswordLooksLikeJSON guards a migration hazard:
+// a legacy value that happens to look like JSON must not be parsed as the new
+// format. Expected outputs match the base version's decoder exactly (verified
+// against main), so this branch neither introduces nor worsens the behavior.
+func TestDecodeCredentials_LegacyPasswordLooksLikeJSON(t *testing.T) {
+	// Colon-free JSON-looking bare password: preserved intact. The earlier
+	// first-byte heuristic corrupted this to an empty secret; the scheme prefix
+	// fixes it and restores the base decoder's result.
+	if got := decodeCredentials([]byte("{}")); got.Username != "" || got.Password != "{}" {
+		t.Errorf(`bare password "{}" = %+v, want {"" "{}"}`, got)
+	}
+	// JSON-looking value with a colon: decoded by the unchanged legacy colon
+	// split, byte-for-byte as the base version did. The guarantee this branch
+	// adds is only that it is never parsed as the new JSON format (which dropped
+	// the secret entirely); the colon split itself is pre-existing behavior.
+	if got := decodeCredentials([]byte(`{"a":1}`)); got.Username != `{"a"` || got.Password != `1}` {
+		t.Errorf(`bare password '{"a":1}' = %+v, want {'{"a"' '1}'} (legacy colon split)`, got)
+	}
+}
+
+// TestDecodeCredentials_LegacySchemeLabelCollision proves the scheme marker
+// cannot collide with a legacy "username:password" value. main wrote text with
+// fmt.Sprintf("%s:%s", ...), so even a username spelling out the scheme label
+// starts with a printable byte, never the marker's leading NUL, and is decoded
+// by the legacy colon split rather than parsed as the new JSON format.
+func TestDecodeCredentials_LegacySchemeLabelCollision(t *testing.T) {
+	legacy := "dbridge-credential/v1:" + `{"username":"x","password":"secret"}`
+
+	got := decodeCredentials([]byte(legacy))
+	if got.Username != "dbridge-credential/v1" {
+		t.Errorf("username = %q, want the literal scheme label", got.Username)
+	}
+	if got.Password != `{"username":"x","password":"secret"}` {
+		t.Errorf("password = %q, want the full legacy JSON string preserved", got.Password)
+	}
+}
+
 // TestAllowedBackends_OsNativeOnly verifies that allowedBackends returns exactly
 // one backend and that it is not a fallback backend (file or pass).
 func TestAllowedBackends_OsNativeOnly(t *testing.T) {
@@ -146,7 +210,6 @@ func TestMockStore_LoadNonexistent(t *testing.T) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
-
 
 // TestMockStore_Delete tests deleting credentials
 func TestMockStore_Delete(t *testing.T) {

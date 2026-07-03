@@ -102,16 +102,20 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(configDir)
+	// Use a per-call viper instance rather than the package global: config.Load
+	// runs concurrently across MCP tool handlers, and the shared global's state
+	// (config name/paths, parsed keys) is not safe under concurrent access.
+	v := viper.New()
+	v.SetConfigName("config")
+	v.SetConfigType("yaml")
+	v.AddConfigPath(configDir)
 
 	// Set defaults
 	defaults := DefaultConfig()
-	viper.SetDefault("settings", defaults.Settings)
+	v.SetDefault("settings", defaults.Settings)
 
 	// Try to read config file
-	if err := viper.ReadInConfig(); err != nil {
+	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config file not found, use defaults
 			return defaults, nil
@@ -120,7 +124,7 @@ func Load() (*Config, error) {
 	}
 
 	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+	if err := v.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
@@ -130,11 +134,11 @@ func Load() (*Config, error) {
 	}
 
 	// Backward compat: migrate old "profiles" key to "connections"
-	if len(config.Connections) == 0 && viper.IsSet("profiles") {
+	if len(config.Connections) == 0 && v.IsSet("profiles") {
 		var compat struct {
 			Profiles map[string]*Connection `mapstructure:"profiles"`
 		}
-		if err := viper.Unmarshal(&compat); err == nil && len(compat.Profiles) > 0 {
+		if err := v.Unmarshal(&compat); err == nil && len(compat.Profiles) > 0 {
 			config.Connections = compat.Profiles
 		}
 	}
@@ -156,17 +160,19 @@ func (c *Config) Save() error {
 
 	configPath := filepath.Join(configDir, "config.yaml")
 
-	viper.Set("settings", c.Settings)
-	viper.Set("connections", c.Connections)
-	// Clean up old "profiles" key after migration
-	if viper.IsSet("profiles") {
-		viper.Set("profiles", nil)
-	}
+	// Fresh viper instance (see Load): avoids racing the package global. The
+	// config is owned by dbridge and is exactly settings+connections; any other
+	// top-level key (the legacy "profiles", or an unrecognized hand-added one) is
+	// intentionally not round-tripped, so a save writes only these two sections.
+	v := viper.New()
+	v.SetConfigType("yaml")
+	v.Set("settings", c.Settings)
+	v.Set("connections", c.Connections)
 
 	// Write to a temp file, set permissions, then rename so the final file
 	// is never readable by others even briefly.
 	tmpPath := filepath.Join(filepath.Dir(configPath), "config.tmp.yaml")
-	if err := viper.WriteConfigAs(tmpPath); err != nil {
+	if err := v.WriteConfigAs(tmpPath); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 	if err := os.Chmod(tmpPath, 0600); err != nil {

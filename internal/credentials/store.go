@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime"
@@ -84,14 +85,58 @@ func NewKeyringStore(serviceName string) (*KeyringStore, error) {
 	}, nil
 }
 
+// storedCredential is the on-disk (keychain) JSON representation of a credential.
+type storedCredential struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// credentialSchemeV1 prefixes the current JSON credential format so it is
+// self-identifying. Legacy entries (the historical "username:password" form and
+// older bare passwords) never carry this prefix, so they always take the legacy
+// decode path and can never be misread as JSON. This matters because a legacy
+// value can itself look like JSON: a bare password of "{}" or "{\"a\":1}" would
+// otherwise decode to an empty secret and, on a rename, be lost permanently.
+//
+// The prefix begins with a NUL byte, which no legacy value can start with:
+// legacy data is "<username>:<password>" (or a bare password), and usernames and
+// passwords are text, never NUL-leading. This makes the marker collision-proof,
+// so it can never be produced by a legacy "username:password" concatenation.
+const credentialSchemeV1 = "\x00dbridge-credential/v1\x00"
+
+// encodeCredentials serializes credentials as a scheme-tagged JSON payload.
+// Marshaling a fixed struct of strings cannot fail, so the error is ignored.
+func encodeCredentials(creds Credentials) []byte {
+	data, _ := json.Marshal(storedCredential(creds))
+	return append([]byte(credentialSchemeV1), data...)
+}
+
+// decodeCredentials parses a stored credential. Current entries carry the
+// credentialSchemeV1 prefix followed by JSON; older entries are the legacy
+// "username:password" form, or (oldest) a bare password. Only the prefix marks a
+// value as JSON, so a legacy value that merely looks like JSON is left untouched.
+func decodeCredentials(data []byte) Credentials {
+	s := string(data)
+
+	if payload, ok := strings.CutPrefix(s, credentialSchemeV1); ok {
+		var sc storedCredential
+		if err := json.Unmarshal([]byte(payload), &sc); err == nil {
+			return Credentials(sc)
+		}
+	}
+
+	if parts := strings.SplitN(s, ":", 2); len(parts) == 2 {
+		return Credentials{Username: parts[0], Password: parts[1]}
+	}
+
+	return Credentials{Password: s}
+}
+
 // Save stores credentials in the keychain
 func (s *KeyringStore) Save(ctx context.Context, connection string, creds Credentials) error {
-	// Store username and password as a single item with JSON
-	data := fmt.Sprintf("%s:%s", creds.Username, creds.Password)
-
 	err := s.keyring.Set(keyring.Item{
 		Key:   s.connectionKey(connection),
-		Data:  []byte(data),
+		Data:  encodeCredentials(creds),
 		Label: fmt.Sprintf("dbridge-%s", connection),
 	})
 	if err != nil {
@@ -111,28 +156,18 @@ func (s *KeyringStore) Load(ctx context.Context, connection string) (Credentials
 		return Credentials{}, fmt.Errorf("failed to load credentials: %w", err)
 	}
 
-	// Parse username:password format
-	data := string(item.Data)
-
-	// Split by first colon
-	parts := strings.SplitN(data, ":", 2)
-	if len(parts) == 2 {
-		return Credentials{
-			Username: parts[0],
-			Password: parts[1],
-		}, nil
-	}
-
-	// Fallback: treat whole data as password (for backward compatibility)
-	return Credentials{
-		Password: data,
-	}, nil
+	return decodeCredentials(item.Data), nil
 }
 
 // Delete removes credentials from the keychain
 func (s *KeyringStore) Delete(ctx context.Context, connection string) error {
 	err := s.keyring.Remove(s.connectionKey(connection))
 	if err != nil {
+		// Report a missing key as ErrNotFound (mirroring Load) so callers can
+		// treat "already absent" as success instead of a hard failure.
+		if errors.Is(err, keyring.ErrKeyNotFound) {
+			return ErrNotFound
+		}
 		return fmt.Errorf("failed to delete credentials: %w", err)
 	}
 	return nil

@@ -235,15 +235,21 @@ func TestMysqlReadOnly_Integration(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// Write should fail
-	_, err = conn.Exec(ctx, "CREATE TABLE _dbridge_ro_test (id INT)")
+	// Write attempted via Query must be rejected by the read-only session,
+	// proving DB-level enforcement.
+	_, err = conn.Query(ctx, "CREATE TABLE _dbridge_ro_test (id INT)")
 	if err == nil {
-		_, _ = conn.Exec(ctx, "DROP TABLE _dbridge_ro_test")
+		_, _ = conn.Query(ctx, "DROP TABLE _dbridge_ro_test")
 		t.Fatal("Expected error for write on read-only connection")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "read only") &&
 		!strings.Contains(strings.ToLower(err.Error()), "read-only") {
 		t.Errorf("Expected read-only error, got: %v", err)
+	}
+
+	// Exec is always refused at the application layer.
+	if _, err := conn.Exec(ctx, "CREATE TABLE _dbridge_ro_test (id INT)"); err == nil {
+		t.Error("Expected Exec to be rejected on read-only connection")
 	}
 }
 
@@ -378,10 +384,13 @@ func TestMysqlConnectionPinning_Integration(t *testing.T) {
 		}
 	}
 
-	// Verify read-only is still enforced after multiple queries
-	_, err = conn.Exec(ctx, "CREATE TABLE _dbridge_pin_test (id INT)")
+	// Verify the pinned connection still enforces read-only after multiple
+	// queries (the SET SESSION read-only state must persist). Use Query so the
+	// write reaches the DB; Exec is refused unconditionally and would not
+	// exercise session state.
+	_, err = conn.Query(ctx, "CREATE TABLE _dbridge_pin_test (id INT)")
 	if err == nil {
-		_, _ = conn.Exec(ctx, "DROP TABLE _dbridge_pin_test")
+		_, _ = conn.Query(ctx, "DROP TABLE _dbridge_pin_test")
 		t.Fatal("Expected read-only error after multiple queries")
 	}
 }

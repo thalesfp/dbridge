@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"context"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli/output"
@@ -26,26 +26,29 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			connName := args[0]
 			sql := args[1]
+			ctx := cmd.Context()
 
 			cfg, err := config.Load()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			conn, err := getConnection(connName)
+			conn, err := getConnection(ctx, connName)
 			if err != nil {
 				return err
 			}
-			ctx := context.Background()
 			defer conn.Close(ctx)
 
 			// Execute query
 			result, err := conn.Query(ctx, sql)
 			if err != nil {
-				// Format error in compact JSON
+				// Format error in compact JSON on stderr so it isn't mixed into
+				// the data stream on stdout. Return a HandledError (already
+				// printed) so the process exits non-zero without main re-printing
+				// it; otherwise a stdout-only caller sees an empty success.
 				errOutput, _ := output.FormatError(err, nil, nil, nil)
-				fmt.Println(errOutput)
-				return nil // Don't return error to avoid duplicate error message
+				fmt.Fprintln(os.Stderr, errOutput)
+				return &HandledError{Message: err.Error()}
 			}
 
 			// Determine output format
