@@ -91,22 +91,36 @@ type storedCredential struct {
 	Password string `json:"password"`
 }
 
-// encodeCredentials serializes credentials as JSON. Marshaling a fixed struct of
-// strings cannot fail, so the error is intentionally ignored.
+// credentialSchemeV1 prefixes the current JSON credential format so it is
+// self-identifying. Legacy entries (the historical "username:password" form and
+// older bare passwords) never carry this prefix, so they always take the legacy
+// decode path and can never be misread as JSON. This matters because a legacy
+// value can itself look like JSON: a bare password of "{}" or "{\"a\":1}" would
+// otherwise decode to an empty secret and, on a rename, be lost permanently.
+//
+// The prefix begins with a NUL byte, which no legacy value can start with:
+// legacy data is "<username>:<password>" (or a bare password), and usernames and
+// passwords are text, never NUL-leading. This makes the marker collision-proof,
+// so it can never be produced by a legacy "username:password" concatenation.
+const credentialSchemeV1 = "\x00dbridge-credential/v1\x00"
+
+// encodeCredentials serializes credentials as a scheme-tagged JSON payload.
+// Marshaling a fixed struct of strings cannot fail, so the error is ignored.
 func encodeCredentials(creds Credentials) []byte {
 	data, _ := json.Marshal(storedCredential(creds))
-	return data
+	return append([]byte(credentialSchemeV1), data...)
 }
 
-// decodeCredentials parses a stored credential. Current entries are JSON; older
-// entries are the legacy "username:password" form, or (oldest) a bare password.
-// Legacy values never start with '{', so they can't be mistaken for JSON.
+// decodeCredentials parses a stored credential. Current entries carry the
+// credentialSchemeV1 prefix followed by JSON; older entries are the legacy
+// "username:password" form, or (oldest) a bare password. Only the prefix marks a
+// value as JSON, so a legacy value that merely looks like JSON is left untouched.
 func decodeCredentials(data []byte) Credentials {
 	s := string(data)
 
-	if len(s) > 0 && s[0] == '{' {
+	if payload, ok := strings.CutPrefix(s, credentialSchemeV1); ok {
 		var sc storedCredential
-		if err := json.Unmarshal(data, &sc); err == nil {
+		if err := json.Unmarshal([]byte(payload), &sc); err == nil {
 			return Credentials(sc)
 		}
 	}
