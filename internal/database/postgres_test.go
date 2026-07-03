@@ -132,6 +132,32 @@ func TestBuildPgConnString_EscapesMetacharacters(t *testing.T) {
 	}
 }
 
+// TestBuildPgConnString_PasswordlessDoesNotInheritPGPASSWORD verifies that a
+// connection configured without a password sends an explicit empty password
+// rather than falling back to the ambient PGPASSWORD. pgx only treats the URL
+// password as supplied when the userinfo carries a password component, so the
+// builder must always emit one (user:@host), never bare userinfo (user@host).
+func TestBuildPgConnString_PasswordlessDoesNotInheritPGPASSWORD(t *testing.T) {
+	t.Setenv("PGPASSWORD", "ambient-secret")
+
+	cfg := ConnectionConfig{
+		Host:     "localhost",
+		Port:     5432,
+		Database: "mydb",
+		Username: "app",
+		Password: "",
+		SSLMode:  "disable",
+	}
+
+	pc, err := pgxpool.ParseConfig(buildPgConnString(&cfg))
+	if err != nil {
+		t.Fatalf("connection string must parse, got error: %v", err)
+	}
+	if pc.ConnConfig.Password != "" {
+		t.Errorf("passwordless connection resolved password = %q, want \"\" (must not inherit PGPASSWORD)", pc.ConnConfig.Password)
+	}
+}
+
 // pgTestConfig parses TEST_DATABASE_URL into a ConnectionConfig.
 func pgTestConfig(t *testing.T) *ConnectionConfig {
 	t.Helper()

@@ -61,16 +61,14 @@ func buildPgConnString(config *ConnectionConfig) string {
 	}
 	query.Set("default_transaction_read_only", "on")
 
-	var user *url.Userinfo
-	if config.Password != "" {
-		user = url.UserPassword(config.Username, config.Password)
-	} else {
-		user = url.User(config.Username)
-	}
-
+	// Always emit an explicit password component (url.UserPassword keeps the
+	// colon even when the password is empty), so a passwordless connection sends
+	// an explicit empty password instead of falling back to PGPASSWORD from the
+	// environment. The keychain/config is the sole source of truth for
+	// credentials; ambient env secrets must never leak into a connection.
 	u := &url.URL{
 		Scheme:   "postgres",
-		User:     user,
+		User:     url.UserPassword(config.Username, config.Password),
 		Host:     fmt.Sprintf("%s:%d", config.Host, config.Port),
 		Path:     "/" + config.Database,
 		RawQuery: query.Encode(),
