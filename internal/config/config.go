@@ -160,8 +160,10 @@ func (c *Config) Save() error {
 
 	configPath := filepath.Join(configDir, "config.yaml")
 
-	// Fresh viper instance (see Load): avoids racing the package global and
-	// writes exactly settings+connections, dropping any legacy "profiles" key.
+	// Fresh viper instance (see Load): avoids racing the package global. The
+	// config is owned by dbridge and is exactly settings+connections; any other
+	// top-level key (the legacy "profiles", or an unrecognized hand-added one) is
+	// intentionally not round-tripped, so a save writes only these two sections.
 	v := viper.New()
 	v.SetConfigType("yaml")
 	v.Set("settings", c.Settings)
