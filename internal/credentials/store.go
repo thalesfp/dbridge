@@ -149,6 +149,11 @@ func (s *KeyringStore) Load(ctx context.Context, connection string) (Credentials
 func (s *KeyringStore) Delete(ctx context.Context, connection string) error {
 	err := s.keyring.Remove(s.connectionKey(connection))
 	if err != nil {
+		// Report a missing key as ErrNotFound (mirroring Load) so callers can
+		// treat "already absent" as success instead of a hard failure.
+		if errors.Is(err, keyring.ErrKeyNotFound) {
+			return ErrNotFound
+		}
 		return fmt.Errorf("failed to delete credentials: %w", err)
 	}
 	return nil
