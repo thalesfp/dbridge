@@ -234,8 +234,7 @@ connections:
 Field notes:
 
 - `driver` defaults to `postgres` when omitted (backward compatibility with older configs).
-- `ssl_mode` uses PostgreSQL-style values (`disable`, `prefer`, `require`, `verify-ca`, `verify-full`) and is mapped to each driver's native TLS settings. The default is `verify-full` for every driver. `require` encrypts the connection but does not verify the server certificate; `verify-ca` and `verify-full` additionally verify it.
-  - **Upgrade note (MySQL):** through v0.6.0, MySQL `require` verified the server certificate. It now matches the PostgreSQL/libpq meaning (encrypt only, no verification), so `require` and `verify-full` are no longer equivalent for MySQL. If you relied on `require` to authenticate a MySQL server, switch that connection to `verify-full`. dbridge prints a warning when a MySQL connection uses a mode that does not verify the server certificate (`require` or `prefer`).
+- `ssl_mode` uses PostgreSQL-style values (`disable`, `prefer`, `require`, `verify-ca`, `verify-full`) and is mapped to each driver's native TLS settings. The default is `verify-full` for every driver. `verify-ca` and `verify-full` verify the server certificate; `disable` and `prefer` do not. Whether `require` verifies the certificate depends on the driver, so use `verify-full` when you need guaranteed server authentication.
 - `uri` (MongoDB) lets you supply a full connection URI instead of host/port fields.
 - `srv` (MongoDB) switches to `mongodb+srv://` for Atlas-style DNS seed lists.
 - `disabled: true` keeps a connection configured but refuses queries against it. Toggle it from the `dbridge config` TUI.

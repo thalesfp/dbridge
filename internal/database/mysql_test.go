@@ -50,7 +50,7 @@ func TestBuildMysqlDSN(t *testing.T) {
 				Password: "pass",
 				SSLMode:  "require",
 			},
-			expected: "admin:pass@tcp(db.example.com:3306)/app?parseTime=true&tls=skip-verify",
+			expected: "admin:pass@tcp(db.example.com:3306)/app?parseTime=true&tls=true",
 		},
 	}
 
@@ -100,7 +100,7 @@ func TestMapSSLToMysqlTLS(t *testing.T) {
 		{"disable", "false"},
 		{"prefer", "preferred"},
 		{"preferred", "preferred"},
-		{"require", "skip-verify"},
+		{"require", "true"},
 		{"verify-ca", "true"},
 		{"verify-full", "true"},
 		{"", "true"},          // unknown defaults to secure
@@ -112,33 +112,6 @@ func TestMapSSLToMysqlTLS(t *testing.T) {
 			result := mapSSLToMysqlTLS(tt.ssl)
 			if result != tt.expected {
 				t.Errorf("mapSSLToMysqlTLS(%q) = %q, want %q", tt.ssl, result, tt.expected)
-			}
-		})
-	}
-}
-
-// TestMysqlTLSInsecure verifies that the non-verifying modes (require and
-// prefer) are reported insecure so the connect-time warning fires for them,
-// while the verifying modes and explicit plaintext (disable) are not flagged.
-func TestMysqlTLSInsecure(t *testing.T) {
-	tests := []struct {
-		ssl      string
-		insecure bool
-	}{
-		{"require", true},
-		{"prefer", true},
-		{"preferred", true},
-		{"verify-ca", false},
-		{"verify-full", false},
-		{"disable", false},
-		{"", false},
-		{"REQUIRE", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.ssl, func(t *testing.T) {
-			if got := mysqlTLSInsecure(tt.ssl); got != tt.insecure {
-				t.Errorf("mysqlTLSInsecure(%q) = %v, want %v", tt.ssl, got, tt.insecure)
 			}
 		})
 	}

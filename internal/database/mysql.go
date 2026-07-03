@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -24,10 +23,6 @@ type MysqlDriver struct{}
 
 func (d *MysqlDriver) Connect(ctx context.Context, config *ConnectionConfig) (Connection, error) {
 	dsn := buildMysqlDSN(config)
-
-	if mysqlTLSInsecure(config.SSLMode) {
-		fmt.Fprintf(os.Stderr, "warning: MySQL connection to %s uses ssl_mode=%s, which does not verify the server's TLS certificate; use ssl_mode=verify-full to authenticate the server.\n", config.Host, config.SSLMode)
-	}
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -81,12 +76,6 @@ func buildMysqlDSN(config *ConnectionConfig) string {
 }
 
 // mapSSLToMysqlTLS maps dbridge ssl_mode values to MySQL tls parameter values.
-//
-// "require" means encrypt but do not verify the server certificate (matching
-// libpq semantics), which is go-sql-driver's "skip-verify". "verify-ca" and
-// "verify-full" both map to "true" (full chain + hostname verification); the
-// driver has no CA-only-without-hostname preset, so verify-ca is treated as
-// verify-full.
 func mapSSLToMysqlTLS(sslMode string) string {
 	switch strings.ToLower(sslMode) {
 	case "disable":
@@ -94,29 +83,13 @@ func mapSSLToMysqlTLS(sslMode string) string {
 	case "prefer", "preferred":
 		return "preferred"
 	case "require":
-		return "skip-verify"
+		return "true"
 	case "verify-ca":
 		return "true"
 	case "verify-full":
 		return "true"
 	default:
 		return "true"
-	}
-}
-
-// mysqlTLSInsecure reports whether the ssl_mode yields a MySQL connection that
-// does not authenticate the server, so callers can warn that it offers no
-// protection against a man-in-the-middle. It covers go-sql-driver's "skip-verify"
-// (require: encrypted but unverified) and "preferred" (prefer: opportunistic TLS
-// that skips verification and can fall back to plaintext). Explicit "disable" is
-// not flagged: it is an unambiguous opt-out of TLS, not a mode a user could
-// mistake for verified.
-func mysqlTLSInsecure(sslMode string) bool {
-	switch mapSSLToMysqlTLS(sslMode) {
-	case "skip-verify", "preferred":
-		return true
-	default:
-		return false
 	}
 }
 
