@@ -351,3 +351,48 @@ func TestPersistConnectionEdit(t *testing.T) {
 		}
 	})
 }
+
+func TestPrefillCredentials(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("returns the stored credential when present", func(t *testing.T) {
+		s := newFakeCredStore()
+		s.data["c"] = credentials.Credentials{Username: "u", Password: "pw"}
+
+		got, err := prefillCredentials(ctx, s, "c")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Password != "pw" {
+			t.Errorf("prefill = %+v, want the stored credential", got)
+		}
+	})
+
+	t.Run("a missing secret yields an empty prefill and no error", func(t *testing.T) {
+		s := newFakeCredStore()
+
+		got, err := prefillCredentials(ctx, s, "c")
+		if err != nil {
+			t.Fatalf("a missing credential must not be an error: %v", err)
+		}
+		if got != (credentials.Credentials{}) {
+			t.Errorf("prefill = %+v, want empty", got)
+		}
+	})
+
+	// A hard load failure must not block editing: the prefill is empty and the
+	// error is surfaced for the caller to warn, not returned as a credential.
+	t.Run("a load failure yields an empty prefill and surfaces the error", func(t *testing.T) {
+		s := newFakeCredStore()
+		s.data["c"] = credentials.Credentials{Username: "u", Password: "pw"}
+		s.failLoad["c"] = true
+
+		got, err := prefillCredentials(ctx, s, "c")
+		if err == nil {
+			t.Fatal("expected the load error to be surfaced")
+		}
+		if got != (credentials.Credentials{}) {
+			t.Errorf("prefill = %+v, want empty on load failure", got)
+		}
+	})
+}

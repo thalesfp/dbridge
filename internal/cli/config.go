@@ -694,6 +694,22 @@ func persistConnectionEdit(cfg *config.Config, oldName string, updatedConn, exis
 	return nil
 }
 
+// prefillCredentials reads a connection's stored credential for use as an edit
+// form prefill. It is best-effort: a missing secret (ErrNotFound) yields an
+// empty credential with no error, and any other load failure yields an empty
+// credential plus the error, so the caller can warn and still open the form
+// rather than blocking edits that do not need the secret.
+func prefillCredentials(ctx context.Context, store credentials.Store, name string) (credentials.Credentials, error) {
+	creds, err := store.Load(ctx, name)
+	if err != nil {
+		if errors.Is(err, credentials.ErrNotFound) {
+			return credentials.Credentials{}, nil
+		}
+		return credentials.Credentials{}, err
+	}
+	return creds, nil
+}
+
 // runEditFlow runs the interactive edit flow for a connection
 func runEditFlow(cfg *config.Config, connName string) error {
 	// Get existing connection
@@ -711,10 +727,14 @@ func runEditFlow(cfg *config.Config, connName string) error {
 	ctx := context.Background()
 
 	// Prefill the existing password so an in-form connection test (ctrl+t)
-	// authenticates for real instead of with an empty password.
-	existingCreds, err := credStore.Load(ctx, connName)
-	if err != nil && !errors.Is(err, credentials.ErrNotFound) {
-		return fmt.Errorf("failed to load credentials for '%s': %w", connName, err)
+	// authenticates for real. Prefill is best-effort: a degraded keychain,
+	// access denial, or transient backend error must not block editing metadata
+	// or clearing/replacing a bad password, so on a hard load error the form
+	// still opens with an empty password (which keeps PasswordChanged false, so
+	// a metadata-only save never overwrites the stored secret).
+	existingCreds, loadErr := prefillCredentials(ctx, credStore, connName)
+	if loadErr != nil {
+		fmt.Printf("Warning: could not read the stored password for '%s' (%v); continuing without it.\n", connName, loadErr)
 	}
 
 	// Launch form pre-filled with existing data
