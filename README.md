@@ -5,7 +5,7 @@
 dbridge is built around three ideas:
 
 1. **Agents should never be able to write to your database.** Every connection is read-only by design. There is no flag, config option, or query trick to open a writable connection.
-2. **Credentials don't belong in config files.** Passwords live in the OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service), never in YAML, environment variables, or process arguments.
+2. **Credentials don't belong in config files.** Passwords live in the OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service), never in YAML or environment variables. dbridge prompts for the password by default; the non-interactive `--password` flag is available but places the secret on the command line, so the prompt is preferred.
 3. **Output should be cheap to read for a model.** Results are returned as compact JSON that collapses to a bare value, array, or object when the shape allows, saving tokens on every query.
 
 ## Supported databases
@@ -264,7 +264,7 @@ Each connection's password is stored under `dbridge-<connection-name>`. The conf
 
 If the keychain is locked when a query runs, dbridge returns an error instead of silently attempting a passwordless connection.
 
-**Downgrade note:** credentials are stored in a self-identifying format. Releases through v0.6.0 expect a plain `username:password` layout and cannot read the newer format, so if you roll back to v0.6.0 or earlier after saving or editing a connection, re-enter its password (`dbridge config edit <name>`) so the older version can read it again. Only credentials you re-saved on the newer version are affected.
+**Downgrade note:** credentials are stored in a self-identifying format. Releases through v0.6.0 expect a plain `username:password` layout and cannot read the newer format, so if you roll back to v0.6.0 or earlier after saving or editing a connection, re-enter its password from the interactive `dbridge config` menu so the older version can read it again. Only credentials you re-saved on the newer version are affected.
 
 ### Why am I prompted for a password again?
 
