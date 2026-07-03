@@ -117,6 +117,33 @@ func TestMapSSLToMysqlTLS(t *testing.T) {
 	}
 }
 
+// TestMysqlTLSInsecure verifies that the non-verifying modes (require and
+// prefer) are reported insecure so the connect-time warning fires for them,
+// while the verifying modes and explicit plaintext (disable) are not flagged.
+func TestMysqlTLSInsecure(t *testing.T) {
+	tests := []struct {
+		ssl      string
+		insecure bool
+	}{
+		{"require", true},
+		{"prefer", true},
+		{"preferred", true},
+		{"verify-ca", false},
+		{"verify-full", false},
+		{"disable", false},
+		{"", false},
+		{"REQUIRE", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ssl, func(t *testing.T) {
+			if got := mysqlTLSInsecure(tt.ssl); got != tt.insecure {
+				t.Errorf("mysqlTLSInsecure(%q) = %v, want %v", tt.ssl, got, tt.insecure)
+			}
+		})
+	}
+}
+
 func TestMysqlTypeName(t *testing.T) {
 	tests := []struct {
 		input    string

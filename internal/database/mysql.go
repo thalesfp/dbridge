@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -23,6 +24,10 @@ type MysqlDriver struct{}
 
 func (d *MysqlDriver) Connect(ctx context.Context, config *ConnectionConfig) (Connection, error) {
 	dsn := buildMysqlDSN(config)
+
+	if mysqlTLSInsecure(config.SSLMode) {
+		fmt.Fprintf(os.Stderr, "warning: MySQL connection to %s uses ssl_mode=%s, which does not verify the server's TLS certificate; use ssl_mode=verify-full to authenticate the server.\n", config.Host, config.SSLMode)
+	}
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -96,6 +101,22 @@ func mapSSLToMysqlTLS(sslMode string) string {
 		return "true"
 	default:
 		return "true"
+	}
+}
+
+// mysqlTLSInsecure reports whether the ssl_mode yields a MySQL connection that
+// does not authenticate the server, so callers can warn that it offers no
+// protection against a man-in-the-middle. It covers go-sql-driver's "skip-verify"
+// (require: encrypted but unverified) and "preferred" (prefer: opportunistic TLS
+// that skips verification and can fall back to plaintext). Explicit "disable" is
+// not flagged: it is an unambiguous opt-out of TLS, not a mode a user could
+// mistake for verified.
+func mysqlTLSInsecure(sslMode string) bool {
+	switch mapSSLToMysqlTLS(sslMode) {
+	case "skip-verify", "preferred":
+		return true
+	default:
+		return false
 	}
 }
 
