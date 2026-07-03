@@ -264,6 +264,8 @@ Each connection's password is stored under `dbridge-<connection-name>`. The conf
 
 If the keychain is locked when a query runs, dbridge returns an error instead of silently attempting a passwordless connection.
 
+**Downgrade note:** credentials are stored in a self-identifying format. Releases through v0.6.0 expect a plain `username:password` layout and cannot read the newer format, so if you roll back to v0.6.0 or earlier after saving or editing a connection, re-enter its password (`dbridge config edit <name>`) so the older version can read it again. Only credentials you re-saved on the newer version are affected.
+
 ### Why am I prompted for a password again?
 
 The dedicated `dbridge` keychain auto-locks after a period of inactivity or when the system sleeps. To adjust the timeout on macOS:
