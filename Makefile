@@ -14,6 +14,13 @@ build: ## Build dbridge binary
 	go build -ldflags "-X main.version=dev -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/dbridge ./cmd/dbridge
 	@echo "✓ Binary created at bin/dbridge"
 
+.PHONY: build-write
+build-write: ## Build dbridge-write binary
+	@echo "Building dbridge-write..."
+	@mkdir -p bin
+	go build -ldflags "-X main.version=dev -X main.commit=$$(git rev-parse --short HEAD) -X main.date=$$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/dbridge-write ./cmd/dbridge-write
+	@echo "✓ Binary created at bin/dbridge-write"
+
 .PHONY: run
 run: build ## Build and run dbridge (pass args with ARGS=)
 	@./bin/dbridge $(ARGS)
@@ -31,6 +38,13 @@ install: build ## Install dbridge to /usr/local/bin
 	@echo ""
 	@echo "Run 'dbridge --help' to get started"
 
+.PHONY: install-write
+install-write: build-write ## Install dbridge-write to /usr/local/bin
+	@echo "Installing dbridge-write to /usr/local/bin..."
+	@sudo cp bin/dbridge-write /usr/local/bin/dbridge-write
+	@sudo chmod +x /usr/local/bin/dbridge-write
+	@echo "✓ dbridge-write installed successfully"
+
 .PHONY: uninstall
 uninstall: ## Remove dbridge from /usr/local/bin
 	@echo "Uninstalling dbridge..."
@@ -43,6 +57,7 @@ uninstall: ## Remove dbridge from /usr/local/bin
 
 .PHONY: test
 test: ## Run unit tests
+	./scripts/check-read-boundary.sh
 	go test -v -short ./...
 
 .PHONY: test-integration

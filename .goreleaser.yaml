@@ -29,13 +29,60 @@ builds:
       - amd64
       - arm64
 
+  - id: dbridge-write-darwin
+    main: ./cmd/dbridge-write
+    binary: dbridge-write
+    ldflags: *ldflags
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: dbridge-write-linux
+    main: ./cmd/dbridge-write
+    binary: dbridge-write
+    ldflags: *ldflags
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
 archives:
-  - format: tar.gz
+  - id: dbridge
+    ids:
+      - dbridge-darwin
+      - dbridge-linux
+    format: tar.gz
+    name_template: "dbridge_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: dbridge-write
+    ids:
+      - dbridge-write-darwin
+      - dbridge-write-linux
+    format: tar.gz
+    name_template: "dbridge-write_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 brews:
-  - repository:
+  - name: dbridge
+    ids:
+      - dbridge
+    repository:
       owner: thalesfp
       name: homebrew-dbridge
     homepage: https://github.com/thalesfp/dbridge
     description: Multi-database CLI and MCP server for AI agents
+    license: MIT
+  - name: dbridge-write
+    ids:
+      - dbridge-write
+    repository:
+      owner: thalesfp
+      name: homebrew-dbridge
+    homepage: https://github.com/thalesfp/dbridge
+    description: Write-capable database CLI and MCP server for AI agents
     license: MIT

@@ -10,8 +10,9 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Settings Settings            `mapstructure:"settings" yaml:"settings"`
-	Connections map[string]*Connection `mapstructure:"connections" yaml:"connections"`
+	Settings         Settings                    `mapstructure:"settings" yaml:"settings"`
+	Connections      map[string]*Connection      `mapstructure:"connections" yaml:"connections"`
+	WriteConnections map[string]*WriteConnection `mapstructure:"write_connections" yaml:"write_connections,omitempty"`
 }
 
 // Settings holds global application settings
@@ -26,10 +27,10 @@ type Settings struct {
 type OutputConfig struct {
 	Default         string `mapstructure:"default" yaml:"default"`                   // auto, compact, full, table, csv
 	AutoDetectTTY   bool   `mapstructure:"auto_detect_tty" yaml:"auto_detect_tty"`   // Auto-switch based on TTY
-	IncludeTypes    bool   `mapstructure:"include_types" yaml:"include_types"`        // Include column types
-	IncludeTiming   bool   `mapstructure:"include_timing" yaml:"include_timing"`      // Include execution time
-	IncludeWarnings bool   `mapstructure:"include_warnings" yaml:"include_warnings"`  // Include warnings
-	SmartSimplify   bool   `mapstructure:"smart_simplify" yaml:"smart_simplify"`      // Smart format for single col/row
+	IncludeTypes    bool   `mapstructure:"include_types" yaml:"include_types"`       // Include column types
+	IncludeTiming   bool   `mapstructure:"include_timing" yaml:"include_timing"`     // Include execution time
+	IncludeWarnings bool   `mapstructure:"include_warnings" yaml:"include_warnings"` // Include warnings
+	SmartSimplify   bool   `mapstructure:"smart_simplify" yaml:"smart_simplify"`     // Smart format for single col/row
 }
 
 // SafetyConfig holds safety settings
@@ -52,6 +53,14 @@ type Connection struct {
 	SRV         bool   `mapstructure:"srv" yaml:"srv,omitempty"`
 	Environment string `mapstructure:"environment" yaml:"environment,omitempty"`
 	Description string `mapstructure:"description" yaml:"description,omitempty"`
+}
+
+// WriteConnection opts a named read connection into writable access with a
+// separate database identity. Endpoint settings always come from Connection.
+type WriteConnection struct {
+	Connection string `mapstructure:"connection" yaml:"connection"`
+	Username   string `mapstructure:"username" yaml:"username"`
+	Disabled   bool   `mapstructure:"disabled" yaml:"disabled,omitempty"`
 }
 
 // DriverDefaults holds default port and SSL mode for a database driver.
@@ -91,7 +100,8 @@ func DefaultConfig() *Config {
 			AuditLog:     false,
 			AuditLogPath: "",
 		},
-		Connections: make(map[string]*Connection),
+		Connections:      make(map[string]*Connection),
+		WriteConnections: make(map[string]*WriteConnection),
 	}
 }
 
@@ -161,13 +171,15 @@ func (c *Config) Save() error {
 	configPath := filepath.Join(configDir, "config.yaml")
 
 	// Fresh viper instance (see Load): avoids racing the package global. The
-	// config is owned by dbridge and is exactly settings+connections; any other
+	// config is owned by dbridge and is exactly settings, connections, and
+	// write_connections; any other
 	// top-level key (the legacy "profiles", or an unrecognized hand-added one) is
-	// intentionally not round-tripped, so a save writes only these two sections.
+	// intentionally not round-tripped, so a save writes only these three sections.
 	v := viper.New()
 	v.SetConfigType("yaml")
 	v.Set("settings", c.Settings)
 	v.Set("connections", c.Connections)
+	v.Set("write_connections", c.WriteConnections)
 
 	// Write to a temp file, set permissions, then rename so the final file
 	// is never readable by others even briefly.
@@ -225,6 +237,51 @@ func (c *Config) GetConnection(name string) (*Connection, error) {
 	}
 
 	return conn, nil
+}
+
+// GetWriteConnection returns a write definition and its referenced endpoint.
+func (c *Config) GetWriteConnection(name string) (*WriteConnection, *Connection, error) {
+	if name == "" {
+		return nil, nil, fmt.Errorf("write connection name is required")
+	}
+
+	writeConn, ok := c.WriteConnections[name]
+	if !ok {
+		return nil, nil, fmt.Errorf("write connection '%s' not found", name)
+	}
+	if writeConn.Connection == "" {
+		return nil, nil, fmt.Errorf("write connection '%s' must reference a read connection", name)
+	}
+	if writeConn.Username == "" {
+		return nil, nil, fmt.Errorf("write connection '%s' requires a username", name)
+	}
+
+	conn, err := c.GetConnection(writeConn.Connection)
+	if err != nil {
+		return nil, nil, fmt.Errorf("write connection '%s': %w", name, err)
+	}
+
+	return writeConn, conn, nil
+}
+
+// AddWriteConnection adds or updates a write connection definition.
+func (c *Config) AddWriteConnection(name string, conn *WriteConnection) {
+	if c.WriteConnections == nil {
+		c.WriteConnections = make(map[string]*WriteConnection)
+	}
+
+	c.WriteConnections[name] = conn
+}
+
+// RemoveWriteConnection removes a write connection definition.
+func (c *Config) RemoveWriteConnection(name string) error {
+	if _, ok := c.WriteConnections[name]; !ok {
+		return fmt.Errorf("write connection '%s' not found", name)
+	}
+
+	delete(c.WriteConnections, name)
+
+	return nil
 }
 
 // RemoveConnection removes a connection
