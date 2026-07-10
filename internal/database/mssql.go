@@ -10,6 +10,7 @@ import (
 	"time"
 
 	_ "github.com/microsoft/go-mssqldb"
+	"github.com/thalesfp/dbridge/internal/dbconfig"
 )
 
 func init() { RegisterDriver("mssql", &MssqlDriver{}) }
@@ -91,18 +92,7 @@ func buildMssqlDSN(config *ConnectionConfig) string {
 // possible; verify-ca is treated as an alias of verify-full (encrypt + full
 // validation).
 func mapSSLToMssql(sslMode string) (encrypt string, trust string) {
-	switch strings.ToLower(sslMode) {
-	case "disable":
-		return "disable", ""
-	case "prefer", "preferred":
-		return "false", ""
-	case "require":
-		return "true", "true"
-	case "verify-ca", "verify-full":
-		return "true", "false"
-	default:
-		return "true", "false"
-	}
+	return dbconfig.MSSQLTLSMode(sslMode)
 }
 
 // mssqlReadLeaders are the only statement-leading keywords a read query may start with.

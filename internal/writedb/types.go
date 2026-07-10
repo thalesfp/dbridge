@@ -29,6 +29,7 @@ type BatchResult struct {
 	Results  []StatementResult `json:"results"`
 	Duration time.Duration     `json:"duration"`
 	Error    string            `json:"error,omitempty"`
+	Warnings []string          `json:"warnings,omitempty"`
 }
 
 // StatementResult represents one result or command completion in a batch.

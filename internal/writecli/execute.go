@@ -1,11 +1,10 @@
 package writecli
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/thalesfp/dbridge/internal/config"
+	"github.com/thalesfp/dbridge/internal/cli"
 )
 
 // NewExecuteCmd creates the direct batch execution command.
@@ -18,40 +17,21 @@ func NewExecuteCmd() *cobra.Command {
 			name := args[0]
 			batch := args[1]
 
-			cfg, err := config.Load()
-			if err != nil {
-				return fmt.Errorf("failed to load audit config: %w", err)
-			}
-			if err := writeAuditEvent(cfg, name, batch); err != nil {
-				return err
-			}
-
-			conn, err := getConnection(cmd.Context(), name)
+			conn, err := prepareExecution(cmd.Context(), name, batch)
 			if err != nil {
 				return err
 			}
 			defer conn.Close()
 
 			result, executeErr := conn.Execute(cmd.Context(), batch)
-			if result == nil {
-				if executeErr == nil {
-					return fmt.Errorf("batch returned no result")
-				}
-
-				return executeErr
-			}
-			if executeErr != nil {
-				result.Error = executeErr.Error()
-			}
-
-			data, err := json.Marshal(result)
+			data, failed, err := renderBatchResult(result, executeErr)
 			if err != nil {
 				return err
 			}
 			fmt.Println(string(data))
 
-			if executeErr != nil {
-				return fmt.Errorf("batch execution failed")
+			if failed {
+				return &cli.HandledError{Message: executeErr.Error()}
 			}
 
 			return nil

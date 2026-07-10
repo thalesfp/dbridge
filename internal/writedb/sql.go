@@ -10,10 +10,12 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/microsoft/go-mssqldb"
+	"github.com/thalesfp/dbridge/internal/dbconfig"
 )
 
 type sqlConnection struct {
-	db *sql.DB
+	db     *sql.DB
+	driver string
 }
 
 func connectMySQL(ctx context.Context, config *Config) (Connection, error) {
@@ -25,7 +27,7 @@ func connectMySQL(ctx context.Context, config *Config) (Connection, error) {
 	cfg.DBName = config.Database
 	cfg.ParseTime = true
 	cfg.MultiStatements = true
-	cfg.TLSConfig = mysqlTLSMode(config.SSLMode)
+	cfg.TLSConfig = dbconfig.MySQLTLSMode(config.SSLMode)
 
 	return openSQLConnection(ctx, "mysql", cfg.FormatDSN())
 }
@@ -36,7 +38,7 @@ func connectMSSQL(ctx context.Context, config *Config) (Connection, error) {
 		query.Set("database", config.Database)
 	}
 
-	encrypt, trust := mssqlTLSMode(config.SSLMode)
+	encrypt, trust := dbconfig.MSSQLTLSMode(config.SSLMode)
 	query.Set("encrypt", encrypt)
 	if trust != "" {
 		query.Set("trustservercertificate", trust)
@@ -63,12 +65,22 @@ func openSQLConnection(ctx context.Context, driver, dsn string) (Connection, err
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &sqlConnection{db: db}, nil
+	return &sqlConnection{db: db, driver: driver}, nil
 }
 
 func (c *sqlConnection) Execute(ctx context.Context, batch string) (*BatchResult, error) {
 	start := time.Now()
-	result := &BatchResult{Results: make([]StatementResult, 0)}
+	driverName := c.driver
+	if driverName == "sqlserver" {
+		driverName = "mssql"
+	}
+	result := &BatchResult{
+		Results: make([]StatementResult, 0),
+		Warnings: []string{fmt.Sprintf(
+			"per-statement rows_affected is unavailable for %s batches because execution preserves result sets",
+			driverName,
+		)},
+	}
 
 	rows, err := c.db.QueryContext(ctx, batch)
 	if err != nil {
@@ -141,32 +153,6 @@ func collectSQLResult(rows *sql.Rows) (StatementResult, error) {
 	result.RowCount = len(result.Rows)
 
 	return result, rows.Err()
-}
-
-func mysqlTLSMode(sslMode string) string {
-	switch strings.ToLower(sslMode) {
-	case "disable":
-		return "false"
-	case "prefer", "preferred":
-		return "preferred"
-	case "require", "verify-ca", "verify-full", "":
-		return "true"
-	default:
-		return "true"
-	}
-}
-
-func mssqlTLSMode(sslMode string) (string, string) {
-	switch strings.ToLower(sslMode) {
-	case "disable":
-		return "disable", ""
-	case "prefer", "preferred":
-		return "true", "true"
-	case "require":
-		return "true", "true"
-	default:
-		return "true", "false"
-	}
 }
 
 func (c *sqlConnection) Close() error {

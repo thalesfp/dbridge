@@ -180,6 +180,11 @@ calls. It does not parse, rewrite, automatically wrap, preview, or limit the
 batch. Database grants are the authorization boundary, so use a dedicated role
 with only the permissions the agent should have.
 
+PostgreSQL reports command tags and per-statement affected-row counts. MySQL and
+SQL Server execution preserves arbitrary mixed-batch result sets, but their
+`database/sql` query paths do not expose per-statement affected-row counts.
+Results from those drivers include a warning and may omit `rows_affected`.
+
 Optional audit logging records the write connection name, timestamp, and a
 SHA-256 digest of the SQL before execution. It never records SQL text, results,
 or credentials.

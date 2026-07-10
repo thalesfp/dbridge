@@ -12,12 +12,7 @@ import (
 
 const credentialService = "dbridge-write"
 
-func getConnection(ctx context.Context, name string) (writedb.Connection, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
+func getConnection(ctx context.Context, cfg *config.Config, name string) (writedb.Connection, error) {
 	writeConn, endpoint, err := cfg.GetWriteConnection(name)
 	if err != nil {
 		return nil, err
@@ -56,4 +51,16 @@ func getConnection(ctx context.Context, name string) (writedb.Connection, error)
 	}
 
 	return conn, nil
+}
+
+func prepareExecution(ctx context.Context, name, batch string) (writedb.Connection, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+	if err := writeAuditEvent(cfg, name, batch); err != nil {
+		return nil, err
+	}
+
+	return getConnection(ctx, cfg, name)
 }

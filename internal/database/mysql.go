@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/thalesfp/dbridge/internal/dbconfig"
 )
 
 // mysqlReadOnlyErr is returned by Exec: dbridge connections are read-only, so
@@ -77,20 +78,7 @@ func buildMysqlDSN(config *ConnectionConfig) string {
 
 // mapSSLToMysqlTLS maps dbridge ssl_mode values to MySQL tls parameter values.
 func mapSSLToMysqlTLS(sslMode string) string {
-	switch strings.ToLower(sslMode) {
-	case "disable":
-		return "false"
-	case "prefer", "preferred":
-		return "preferred"
-	case "require":
-		return "true"
-	case "verify-ca":
-		return "true"
-	case "verify-full":
-		return "true"
-	default:
-		return "true"
-	}
+	return dbconfig.MySQLTLSMode(sslMode)
 }
 
 // mysqlTypeName normalizes a MySQL column type string to a short lowercase name.

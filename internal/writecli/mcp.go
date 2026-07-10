@@ -32,7 +32,7 @@ func registerWriteTools(s *server.MCPServer) {
 	), handleListWriteConnections)
 
 	s.AddTool(mcp.NewTool("execute",
-		mcp.WithDescription("Execute an arbitrary SQL batch using a writable database connection"),
+		mcp.WithDescription("Execute an arbitrary SQL batch using a writable database connection. MySQL and SQL Server preserve result sets but may omit per-statement rows_affected values."),
 		mcp.WithString("connection", mcp.Required(), mcp.Description("Write connection name")),
 		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL batch to send exactly as provided")),
 		mcp.WithReadOnlyHintAnnotation(false),
@@ -90,39 +90,20 @@ func handleExecute(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cfg, configErr := config.Load()
-	if configErr != nil {
-		return mcp.NewToolResultError(configErr.Error()), nil
-	}
-	if err := writeAuditEvent(cfg, name, batch); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	conn, err := getConnection(ctx, name)
+	conn, err := prepareExecution(ctx, name, batch)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	defer conn.Close()
 
 	result, executeErr := conn.Execute(ctx, batch)
-	if result == nil {
-		if executeErr == nil {
-			return mcp.NewToolResultError("batch returned no result"), nil
-		}
-
-		return mcp.NewToolResultError(executeErr.Error()), nil
-	}
-	if executeErr != nil {
-		result.Error = executeErr.Error()
-	}
-
-	data, err := json.Marshal(result)
+	data, failed, err := renderBatchResult(result, executeErr)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	toolResult := mcp.NewToolResultText(string(data))
-	toolResult.IsError = executeErr != nil
+	toolResult.IsError = failed
 
 	return toolResult, nil
 }

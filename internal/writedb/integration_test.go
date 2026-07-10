@@ -38,6 +38,22 @@ func TestMSSQLBatch_Integration(t *testing.T) {
 	`)
 }
 
+func TestMySQLAffectedRowsLimitation_Integration(t *testing.T) {
+	config := mysqlTestConfig(t)
+	assertAffectedRowsWarning(t, config, `
+		CREATE TEMPORARY TABLE _dbridge_write_count_test (id int);
+		INSERT INTO _dbridge_write_count_test VALUES (1), (2);
+	`)
+}
+
+func TestMSSQLAffectedRowsLimitation_Integration(t *testing.T) {
+	config := mssqlTestConfig(t)
+	assertAffectedRowsWarning(t, config, `
+		CREATE TABLE #dbridge_write_count_test (id int);
+		INSERT INTO #dbridge_write_count_test VALUES (1), (2);
+	`)
+}
+
 func assertBatchReturnsRows(t *testing.T, config *Config, batch string) {
 	t.Helper()
 
@@ -59,6 +75,29 @@ func assertBatchReturnsRows(t *testing.T, config *Config, batch string) {
 	}
 
 	t.Fatalf("batch returned no two-row result: %+v", result)
+}
+
+func assertAffectedRowsWarning(t *testing.T, config *Config, batch string) {
+	t.Helper()
+
+	conn, err := Connect(t.Context(), config)
+	if err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+	defer conn.Close()
+
+	result, err := conn.Execute(t.Context(), batch)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, result = %+v", err, result)
+	}
+	if len(result.Warnings) == 0 {
+		t.Fatal("Execute() returned no affected-row warning")
+	}
+	for _, statement := range result.Results {
+		if statement.RowsAffected != nil {
+			t.Fatalf("RowsAffected = %d, want unavailable", *statement.RowsAffected)
+		}
+	}
 }
 
 func postgresTestConfig(t *testing.T) *Config {

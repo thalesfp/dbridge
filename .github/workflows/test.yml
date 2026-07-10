@@ -24,6 +24,9 @@ jobs:
     - name: Download dependencies
       run: go mod download
 
+    - name: Verify read dependency boundary
+      run: ./scripts/check-read-boundary.sh
+
     - name: Run unit tests
       run: go test -v -short ./...
 
@@ -98,4 +101,4 @@ jobs:
         cache: true
 
     - name: Build
-      run: go build -v ./cmd/dbridge
+      run: go build -v ./...
