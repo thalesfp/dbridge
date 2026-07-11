@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/cli"
+	"github.com/thalesfp/dbridge/internal/writecli"
 )
 
 var (
@@ -15,15 +16,16 @@ var (
 
 func main() {
 	commands := []*cobra.Command{
-		cli.NewConfigCmd(),
+		writecli.NewConfigCmd(),
+		writecli.NewExecuteCmd(),
 		cli.NewQueryCmd(),
 		cli.NewSchemaCmd(),
-		cli.NewMCPCmd(),
+		writecli.NewMCPCmd(),
 	}
 
 	os.Exit(cli.Run(cli.AppOptions{
-		Name:     "dbridge",
-		Short:    "Multi-database CLI for AI agents with MCP server",
+		Name:     "dbridge-write",
+		Short:    "Write-capable database CLI and MCP server",
 		Version:  version,
 		Commit:   commit,
 		Date:     date,

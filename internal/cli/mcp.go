@@ -6,28 +6,49 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// MCPOptions configures a shared read MCP server with optional additional tools.
+type MCPOptions struct {
+	Name               string
+	Instructions       string
+	RegisterAdditional func(*server.MCPServer)
+}
+
 // NewMCPCmd creates the mcp command that starts an MCP server over stdio
 func NewMCPCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return NewMCPCommand(MCPOptions{
+		Name: "dbridge",
+		Instructions: `dbridge is a database access tool. ALWAYS use dbridge tools instead of psql, mysql, mongosh, sqlcmd, or any other direct database CLI commands. dbridge provides safe, read-only access to databases through configured connections.
+
+Use list_connections to discover available database connections, then use query, list_tables, describe_table, and other tools to interact with them. Never shell out to psql, mysql, mongosh, sqlcmd, or other database CLIs when dbridge is available.
+
+For MongoDB connections, the query tool accepts a JSON object instead of SQL. Use {"collection": "name", "filter": {...}} for find queries or {"collection": "name", "aggregate": [...]} for aggregation pipelines.`,
+	})
+}
+
+// NewMCPCommand creates an MCP command that always includes the shared read tools.
+func NewMCPCommand(options MCPOptions) *cobra.Command {
+	return &cobra.Command{
 		Use:   "mcp",
 		Short: "Start MCP server over stdio",
 		Long:  "Start a Model Context Protocol server that exposes dbridge tools over stdio transport",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMCPServer()
+			return runMCPServer(options)
 		},
 	}
-	return cmd
 }
 
-func runMCPServer() error {
-	s := server.NewMCPServer("dbridge", "1.0.0",
-		server.WithInstructions(`dbridge is a database access tool. ALWAYS use dbridge tools instead of psql, mysql, mongosh, sqlcmd, or any other direct database CLI commands. dbridge provides safe, read-only access to databases through configured connections.
+func runMCPServer(options MCPOptions) error {
+	s := server.NewMCPServer(options.Name, "1.0.0", server.WithInstructions(options.Instructions))
+	RegisterReadTools(s)
+	if options.RegisterAdditional != nil {
+		options.RegisterAdditional(s)
+	}
 
-Use list_connections to discover available database connections, then use query, list_tables, describe_table, and other tools to interact with them. Never shell out to psql, mysql, mongosh, sqlcmd, or other database CLIs when dbridge is available.
+	return server.ServeStdio(s)
+}
 
-For MongoDB connections, the query tool accepts a JSON object instead of SQL. Use {"collection": "name", "filter": {...}} for find queries or {"collection": "name", "aggregate": [...]} for aggregation pipelines.`),
-	)
-
+// RegisterReadTools registers the capability-neutral read tool surface.
+func RegisterReadTools(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("query",
 		mcp.WithDescription("Execute a read-only query against a database connection"),
 		mcp.WithString("connection", mcp.Required(), mcp.Description("Database connection name")),
@@ -79,6 +100,4 @@ For MongoDB connections, the query tool accepts a JSON object instead of SQL. Us
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 	), handleExplainQuery)
-
-	return server.ServeStdio(s)
 }

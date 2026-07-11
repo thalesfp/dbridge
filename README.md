@@ -1,10 +1,10 @@
 # dbridge
 
-**A read-only database bridge for AI agents.** One CLI and MCP server that connects Claude Code, Claude Desktop, Codex, and other agents to PostgreSQL, MySQL, MongoDB, and SQL Server.
+**A read-only database bridge for AI agents.** The `dbridge` CLI and MCP server connect Claude Code, Claude Desktop, Codex, and other agents to PostgreSQL, MySQL, MongoDB, and SQL Server. An optional, separately installed `dbridge-write` binary provides explicit write access.
 
 dbridge is built around three ideas:
 
-1. **Agents should never be able to write to your database.** Every connection is read-only by design. There is no flag, config option, or query trick to open a writable connection.
+1. **The read binary must never write to your database.** Every connection opened by `dbridge` is read-only by design. There is no flag, config option, or query trick that turns it into a writable client.
 2. **Credentials don't belong in config files.** Passwords live in the OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service), never in YAML or environment variables. dbridge prompts for the password by default; the non-interactive `--password` flag is available but places the secret on the command line, so the prompt is preferred.
 3. **Output should be cheap to read for a model.** Results are returned as compact JSON that collapses to a bare value, array, or object when the shape allows, saving tokens on every query.
 
@@ -26,6 +26,9 @@ See [Read-only enforcement](#read-only-enforcement) for the details and one SQL 
 ```bash
 brew tap thalesfp/dbridge
 brew install dbridge
+
+# Optional and installed separately
+brew install dbridge-write
 ```
 
 ### From source
@@ -37,6 +40,8 @@ git clone https://github.com/thalesfp/dbridge.git
 cd dbridge
 make build            # binary at ./bin/dbridge
 make install          # optional: copy to /usr/local/bin
+make build-write      # binary at ./bin/dbridge-write
+make install-write    # optional: copy to /usr/local/bin
 ```
 
 ## Quick start
@@ -134,6 +139,62 @@ codex mcp add dbridge -- /path/to/dbridge mcp
 | `explain_query` | Show a query's execution plan |
 
 All tools are annotated as read-only and non-destructive, and the server instructs agents to prefer dbridge over shelling out to `psql`, `mysql`, `mongosh`, or `sqlcmd`.
+
+## Write access
+
+`dbridge-write` is a separate executable with a separate writable connection
+package and keychain. It reuses endpoint metadata from an existing read
+connection, but it never reuses that connection's credentials.
+
+Create the read endpoint first, then opt it into the write namespace with a
+different database identity:
+
+```bash
+dbridge config add production-read \
+  --driver=postgres \
+  --host=db.example.com \
+  --database=app \
+  --username=app_reader
+
+dbridge-write config add production \
+  --connection=production-read \
+  --username=app_writer
+```
+
+Execute a batch directly:
+
+```bash
+dbridge-write execute production 'BEGIN; UPDATE jobs SET claimed = true WHERE id = 42; COMMIT;'
+```
+
+Start the write MCP server:
+
+```bash
+codex mcp add dbridge-write -- /path/to/dbridge-write mcp
+```
+
+The write server exposes all normal read tools plus `list_write_connections`
+and `execute`. `execute` sends arbitrary SQL batches exactly as provided,
+including multiple statements, DDL, transaction control, and stored procedure
+calls. It does not parse, rewrite, automatically wrap, preview, or limit the
+batch. Database grants are the authorization boundary, so use a dedicated role
+with only the permissions the agent should have.
+
+PostgreSQL reports command tags and per-statement affected-row counts. MySQL and
+SQL Server execution preserves arbitrary mixed-batch result sets, but their
+`database/sql` query paths do not expose per-statement affected-row counts.
+Results from those drivers include a warning and may omit `rows_affected`.
+
+When a PostgreSQL batch fails, earlier per-statement results describe server
+responses but do not prove those changes committed. PostgreSQL may roll them
+back as part of the implicit transaction for a multi-statement query, while
+explicit transaction control inside the batch can produce different outcomes.
+Failed PostgreSQL results include this warning; inspect database state before
+retrying.
+
+Optional audit logging records the write connection name, timestamp, and a
+SHA-256 digest of the SQL before execution. It never records SQL text, results,
+or credentials.
 
 ## Querying MongoDB
 
@@ -241,7 +302,7 @@ Field notes:
 
 ## Read-only enforcement
 
-Every dbridge connection is read-only. There is no `readonly` config field, no `--readonly` flag, and no way to open a writable connection.
+Every connection opened by the `dbridge` binary is read-only. There is no `readonly` config field, no `--readonly` flag, and no way to make that binary open a writable connection. Write support lives only in the separately built `dbridge-write` binary.
 
 - **PostgreSQL**: `default_transaction_read_only=on` is appended to every connection string. The server itself rejects any write statement.
 - **MySQL**: `SET SESSION TRANSACTION READ ONLY` is issued on the pinned connection immediately after opening. Writes fail at the session level.
@@ -252,6 +313,9 @@ Every dbridge connection is read-only. There is no `readonly` config field, no `
 
 For defense in depth on any database, use a dedicated read-only database user. dbridge's enforcement is a safety layer on top of, not a replacement for, database-level permissions.
 
+CI also checks that `cmd/dbridge` has no dependency on the writable database or
+write CLI packages.
+
 ## Credential storage
 
 Passwords are stored in a **dedicated OS keychain named `dbridge`**, separate from your login keychain, via [`99designs/keyring`](https://github.com/99designs/keyring):
@@ -261,6 +325,10 @@ Passwords are stored in a **dedicated OS keychain named `dbridge`**, separate fr
 - **Linux**: Secret Service (GNOME Keyring / KWallet)
 
 Each connection's password is stored under `dbridge-<connection-name>`. The config file never contains passwords, and the username in the config file is the source of truth (the keychain only supplies the secret).
+
+Writable credentials use the separate `dbridge-write` keychain service and are
+stored under `dbridge-write-<connection-name>`. The read binary never opens that
+credential store.
 
 If the keychain is locked when a query runs, dbridge returns an error instead of silently attempting a passwordless connection.
 
@@ -284,6 +352,7 @@ Or in Keychain Access: right-click the `dbridge` keychain and choose "Change Set
 
 ```bash
 make build            # build binary to bin/dbridge
+make build-write      # build write binary to bin/dbridge-write
 make test             # run unit tests
 make docker-up        # start test containers (Postgres x4 incl. SSL, MySQL 8, MongoDB 7, SQL Server 2022)
 make test-integration # run integration tests against the containers
