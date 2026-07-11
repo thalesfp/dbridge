@@ -5,6 +5,16 @@ import (
 	"fmt"
 )
 
+// SupportsDriver reports whether writable batch execution is implemented.
+func SupportsDriver(driver string) bool {
+	switch driver {
+	case "postgres", "", "mysql", "mssql":
+		return true
+	default:
+		return false
+	}
+}
+
 // Connect opens a writable connection for a supported SQL driver.
 func Connect(ctx context.Context, config *Config) (Connection, error) {
 	switch config.Driver {

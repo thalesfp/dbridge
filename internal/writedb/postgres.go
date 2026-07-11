@@ -14,6 +14,8 @@ type postgresConnection struct {
 	pool *pgxpool.Pool
 }
 
+const postgresFailedBatchWarning = "earlier PostgreSQL statement results do not imply commit; final state depends on explicit transaction control and PostgreSQL implicit transaction behavior"
+
 func connectPostgres(ctx context.Context, config *Config) (Connection, error) {
 	poolConfig, err := pgxpool.ParseConfig(buildPostgresConnString(config))
 	if err != nil {
@@ -67,6 +69,7 @@ func (c *postgresConnection) Execute(ctx context.Context, sql string) (*BatchRes
 		result.Results = append(result.Results, statement)
 		if readErr != nil {
 			result.Duration = time.Since(start)
+			result.Warnings = append(result.Warnings, postgresFailedBatchWarning)
 
 			return result, fmt.Errorf("failed to read batch result: %w", readErr)
 		}
@@ -74,6 +77,8 @@ func (c *postgresConnection) Execute(ctx context.Context, sql string) (*BatchRes
 
 	result.Duration = time.Since(start)
 	if err := multi.Close(); err != nil {
+		result.Warnings = append(result.Warnings, postgresFailedBatchWarning)
+
 		return result, fmt.Errorf("batch execution failed: %w", err)
 	}
 

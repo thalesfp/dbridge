@@ -185,6 +185,13 @@ SQL Server execution preserves arbitrary mixed-batch result sets, but their
 `database/sql` query paths do not expose per-statement affected-row counts.
 Results from those drivers include a warning and may omit `rows_affected`.
 
+When a PostgreSQL batch fails, earlier per-statement results describe server
+responses but do not prove those changes committed. PostgreSQL may roll them
+back as part of the implicit transaction for a multi-statement query, while
+explicit transaction control inside the batch can produce different outcomes.
+Failed PostgreSQL results include this warning; inspect database state before
+retrying.
+
 Optional audit logging records the write connection name, timestamp, and a
 SHA-256 digest of the SQL before execution. It never records SQL text, results,
 or credentials.

@@ -33,3 +33,16 @@ func TestConnectRejectsUnsupportedDriver(t *testing.T) {
 		t.Fatal("Connect() error = nil")
 	}
 }
+
+func TestSupportsDriver(t *testing.T) {
+	for _, driver := range []string{"", "postgres", "mysql", "mssql"} {
+		if !SupportsDriver(driver) {
+			t.Fatalf("SupportsDriver(%q) = false", driver)
+		}
+	}
+	for _, driver := range []string{"mongodb", "oracle", "unknown"} {
+		if SupportsDriver(driver) {
+			t.Fatalf("SupportsDriver(%q) = true", driver)
+		}
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/thalesfp/dbridge/internal/config"
 	"github.com/thalesfp/dbridge/internal/credentials"
+	"github.com/thalesfp/dbridge/internal/writedb"
 	"golang.org/x/term"
 )
 
@@ -46,7 +47,11 @@ func newConfigAddCmd() *cobra.Command {
 			if _, ok := cfg.WriteConnections[name]; ok {
 				return fmt.Errorf("write connection '%s' already exists", name)
 			}
-			if _, err := cfg.GetConnection(connection); err != nil {
+			endpoint, err := cfg.GetConnection(connection)
+			if err != nil {
+				return err
+			}
+			if err := validateWriteEndpoint(endpoint); err != nil {
 				return err
 			}
 
@@ -89,6 +94,17 @@ func newConfigAddCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("username")
 
 	return cmd
+}
+
+func validateWriteEndpoint(endpoint *config.Connection) error {
+	if !writedb.SupportsDriver(endpoint.Driver) {
+		return fmt.Errorf(
+			"write connections support postgres, mysql, and mssql; referenced connection uses %s",
+			endpoint.Driver,
+		)
+	}
+
+	return nil
 }
 
 func promptPassword() (string, error) {

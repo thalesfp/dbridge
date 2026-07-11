@@ -19,6 +19,31 @@ func TestPostgresBatch_Integration(t *testing.T) {
 	`)
 }
 
+func TestPostgresFailedBatchWarning_Integration(t *testing.T) {
+	config := postgresTestConfig(t)
+	conn, err := Connect(t.Context(), config)
+	if err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+	defer conn.Close()
+
+	result, err := conn.Execute(t.Context(), `
+		CREATE TEMP TABLE _dbridge_write_failure_test (id int);
+		INSERT INTO _dbridge_write_failure_test VALUES (1);
+		SELECT id FROM _dbridge_write_failure_test;
+		SELECT 1 / 0;
+	`)
+	if err == nil {
+		t.Fatal("Execute() error = nil")
+	}
+	if result == nil || len(result.Results) == 0 {
+		t.Fatalf("Execute() returned no partial results: %+v", result)
+	}
+	if len(result.Warnings) == 0 || result.Warnings[0] != postgresFailedBatchWarning {
+		t.Fatalf("Execute() warnings = %v, want PostgreSQL transaction warning", result.Warnings)
+	}
+}
+
 func TestMySQLBatch_Integration(t *testing.T) {
 	config := mysqlTestConfig(t)
 	assertBatchReturnsRows(t, config, `
